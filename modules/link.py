@@ -8,24 +8,7 @@ log = logging.getLogger("emk.link")
 
 main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
 
-def flatten_flags(flags):
-    result = []
-    for flag in flags:
-        try:
-            flag.startswith('a')
-            result.append(flag)
-        except AttributeError:
-            result.extend(flatten_flags(flag))
-    return result
-
-def unique_list(orig):
-    result = []
-    seen = set()
-    for item in orig:
-        if not item in seen:
-            seen.add(item)
-            result.append(item)
-    return result
+utils = emk.module("utils")
 
 class _GccLinker(object):
     def __init__(self, path_prefix=""):
@@ -37,22 +20,22 @@ class _GccLinker(object):
         self.nm_path = path_prefix + "nm"
     
     def contains_main_function(self, objfile):
-        out, err, code = emk.call(self.nm_path, "-g", objfile, print_call=False)
+        out, err, code = utils.call(self.nm_path, "-g", objfile, print_call=False)
         if main_nm_regex.search(out):
             return True
         return False
         
     def extract_static_lib(self, lib):
-        emk.call(self.ar_path, "x", lib, print_call=False)
+        utils.call(self.ar_path, "x", lib, print_call=False)
     
     def add_to_static_lib(self, dest, objs):
-        emk.call(self.ar_path, "r", dest, *objs)
+        utils.call(self.ar_path, "r", dest, *objs)
     
     def create_static_lib(self, dest, source_objs, other_libs):
         objs = list(source_objs)
         orig_dir = os.getcwd()
         dump_dir = os.path.join(orig_dir, emk.build_dir, "__lib_temp__")
-        emk.mkdirs(dump_dir)
+        utils.mkdirs(dump_dir)
         os.chdir(dump_dir)
         counter = 0
         for lib in other_libs:
@@ -70,7 +53,7 @@ class _GccLinker(object):
             counter += 1
         os.chdir(orig_dir)
         
-        emk.rm(dest)
+        utils.rm(dest)
         
         left = len(objs)
         start = 0
@@ -97,14 +80,14 @@ class _GccLinker(object):
         sg = "-Wl,--start-group"
         eg = "-Wl,--end-group"
         call = [cmd] + flags + ["-o", dest] + objs + [sg] + abs_libs + [eg] + lib_dirs + [sg] + libs + [eg]
-        emk.call(*call)
+        utils.call(*call)
 
     def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode=False):
         linker = self.c_path
         if cxx_mode:
             linker = self.cxx_path
         
-        flat_flags = flatten_flags(flags)
+        flat_flags = utils.flatten_flags(flags)
         
         lib_dir_flags = ["-L" + d for d in lib_dirs]
         rel_lib_flags = ["-l" + lib for lib in rel_libs]
@@ -115,7 +98,7 @@ class _GccLinker(object):
         return True
         
     def strip(self, path):
-        emk.call(self.strip_path, "-S", "-x", path)
+        utils.call(self.strip_path, "-S", "-x", path)
 
 class _OsxGccLinker(_GccLinker):
     def __init__(self, path_prefix=""):
@@ -124,9 +107,9 @@ class _OsxGccLinker(_GccLinker):
         self.libtool_path = self.path_prefix + "libtool"
     
     def extract_static_lib(self, lib):
-        out, err, ret = emk.call(self.lipo_path, "-info", lib, print_call=False)
+        out, err, ret = utils.call(self.lipo_path, "-info", lib, print_call=False)
         if "is not a fat file" in out:
-            emk.call(self.ar_path, "x", lib, print_call=False)
+            utils.call(self.ar_path, "x", lib, print_call=False)
         else:
             start, mid, rest = out.partition(lib + " are:")
             archs = rest.strip().split(' ')
@@ -134,9 +117,9 @@ class _OsxGccLinker(_GccLinker):
             objs = set()
             for arch in archs:
                 os.mkdir(arch)
-                emk.call(self.lipo_path, lib, "-thin", arch, "-output", os.path.join(arch, "thin.a"), print_call=False)
+                utils.call(self.lipo_path, lib, "-thin", arch, "-output", os.path.join(arch, "thin.a"), print_call=False)
                 os.chdir(arch)
-                emk.call(self.ar_path, "x", "thin.a", print_call=False)
+                utils.call(self.ar_path, "x", "thin.a", print_call=False)
                 objs.update([f for f in os.listdir(os.getcwd()) if os.path.isfile(f) and f.endswith(".o")])
                 os.chdir(current_dir)
             for obj in objs:
@@ -145,21 +128,21 @@ class _OsxGccLinker(_GccLinker):
                     arch_obj = os.path.join(arch, obj)
                     if os.path.isfile(arch_obj):
                         cmd.append(arch_obj)
-                emk.call(*cmd, print_call=False)
+                utils.call(*cmd, print_call=False)
 
     def add_to_static_lib(self, dest, objs):
         cmd = [self.libtool_path, "-static", "-s", "-o", dest, "-"]
         if os.path.isfile(dest):
             cmd.append(dest)
         cmd.extend(objs)
-        emk.call(*cmd)
+        utils.call(*cmd)
 
     def shlib_opts(self):
         return ["-dynamiclib"]
     
     def link_cmd(self, cmd, flags, dest, objs, abs_libs, lib_dirs, libs):
         call = [cmd] + flags + ["-o", dest] + objs + abs_libs + lib_dirs + libs
-        emk.call(*call)
+        utils.call(*call)
         
 link_cache = {}
 need_depdirs = {}
@@ -307,7 +290,7 @@ class Module(object):
     
     def _create_interim_rule(self):
         all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()]) | self.exe_objs
-        emk.rule(["link.__interim__"], all_objs, self._auto_builder, threadsafe=True)
+        emk.rule(["link.__interim__"], all_objs, utils.mark_updated, threadsafe=True)
         emk.build("link.__interim__")
         
     def _simple_detect_exe(self, sourcefile):
@@ -338,7 +321,7 @@ class Module(object):
         
         lib_objs = all_objs - exe_objs
         
-        emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], self._auto_builder, threadsafe=True)
+        emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], utils.mark_updated, threadsafe=True)
         lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         emk.depend("link.__exe_deps__", *lib_deps)
         
@@ -371,7 +354,7 @@ class Module(object):
                 emk.build(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
-            emk.rule(["link.__static_lib__"], [], self._auto_builder, threadsafe=True)
+            emk.rule(["link.__static_lib__"], [], utils.mark_updated, threadsafe=True)
         
         exe_targets = []
         exe_names = set()
@@ -391,11 +374,8 @@ class Module(object):
             emk.alias(path, name)
             exe_targets.append(path)
             
-        emk.rule(["link.__exes__"], exe_targets, self._auto_builder, threadsafe=True)
+        emk.rule(["link.__exes__"], exe_targets, utils.mark_updated, threadsafe=True)
         emk.build("link.__exes__")
-    
-    def _auto_builder(self, produces, requires, args):
-        emk.mark_updated(*produces)
     
     def _create_static_lib(self, produces, requires, args):
         global link_cache

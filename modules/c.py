@@ -4,24 +4,7 @@ import shlex
 
 log = logging.getLogger("emk.c")
 
-def flatten_flags(flags):
-    result = []
-    for flag in flags:
-        try:
-            flag.startswith('a')
-            result.append(flag)
-        except AttributeError:
-            result.extend(flatten_flags(flag))
-    return result
-
-def unique_list(orig):
-    result = []
-    seen = set()
-    for item in orig:
-        if not item in seen:
-            seen.add(item)
-            result.append(item)
-    return result
+utils = emk.module("utils")
 
 class _GccCompiler(object):
     def __init__(self, path_prefix=""):
@@ -46,9 +29,9 @@ class _GccCompiler(object):
         args.extend(self.depfile_args(dep_file))
         args.extend(["-I%s" % (emk.abspath(d)) for d in includes])
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
-        args.extend(flatten_flags(flags))
+        args.extend(utils.flatten_flags(flags))
         args.extend(["-o", dest, "-c", source])
-        emk.call(*args)
+        utils.call(*args)
         
     def compile_c(self, source, dest, dep_file, includes, defines, flags):
         self.compile(self.c_path, source, dest, dep_file, includes, defines, flags)
@@ -143,13 +126,13 @@ class Module(object):
             cxx_sources.add(f)
         
         c_includes = self.include_dirs | self.c.include_dirs
-        c_flags = unique_list(self.flags + self.c.flags)
+        c_flags = utils.unique_list(self.flags + self.c.flags)
         c_defines = dict(self.defines)
         c_defines.update(self.c.defines)
         c_args = {"c++":False, "includes":c_includes, "defines":c_defines, "flags":c_flags}
         
         cxx_includes = self.include_dirs | self.cxx.include_dirs
-        cxx_flags = unique_list(self.flags + self.cxx.flags)
+        cxx_flags = utils.unique_list(self.flags + self.cxx.flags)
         cxx_defines = dict(self.defines)
         cxx_defines.update(self.cxx.defines)
         cxx_args = {"c++":True, "includes":cxx_includes, "defines":cxx_defines, "flags":cxx_flags}

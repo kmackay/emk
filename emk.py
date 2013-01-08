@@ -17,8 +17,6 @@ import time
 import json
 import threading
 import shutil
-import subprocess
-import inspect
 
 _module_path = os.path.realpath(os.path.abspath(__file__))
 
@@ -1388,51 +1386,6 @@ class EMK(EMK_Base):
     
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
-    
-    def mkdirs(self, path):
-        _mkdirs(path)
-    
-    def rm(self, path):
-        try:
-            os.remove(path)
-        except OSError:
-            pass
-    
-    def call(self, *args, **kwargs):
-        print_call = True
-        print_stdout = False
-        print_stderr = "nonzero"
-        exit_on_nonzero_return = True
-        cwd = None
-        
-        if "print_call" in kwargs and not kwargs["print_call"]:
-            print_call = False
-        if "print_stdout" in kwargs and kwargs["print_stdout"]:
-            print_stdout = True
-        if "print_stderr" in kwargs:
-            print_stderr = kwargs["print_stderr"]
-        if "noexit" in kwargs and kwargs["noexit"]:
-            exit_on_nonzero_return = False
-        if "cwd" in kwargs:
-            cwd = kwargs["cwd"]
-
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
-        proc_stdout, proc_stderr = proc.communicate()
-        strings = []
-        if print_call:
-            strings.append(' '.join(args))
-        if print_stdout and proc_stdout:
-            strings.append("emk: Subprocess stdout:")
-            strings.append(proc_stdout)
-        if (print_stderr == True or (print_stderr == "nonzero" and proc.returncode != 0)) and proc_stderr:
-            strings.append("emk: Subprocess stderr:")
-            strings.append(proc_stderr)
-        if strings:
-            self.log_print('\n'.join(strings))
-        if exit_on_nonzero_return and proc.returncode != 0:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            raise _BuildError("Subprocess '%s' returned %s" % (' '.join(args), proc.returncode), stack)
-        return (proc_stdout, proc_stderr, proc.returncode)
 
 def setup(argv=[]):
     emk = EMK(argv)
