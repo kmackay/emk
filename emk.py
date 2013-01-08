@@ -1095,7 +1095,8 @@ class EMK(EMK_Base):
 
         self._done_build = False
         self._added_rule = False
-        while (self._have_unbuilt() and self._added_rule) or self._must_build or \
+        while (self._have_unbuilt() and (self._added_rule or self._prebuild_funcs or self._postbuild_funcs)) or \
+          self._must_build or \
           ((not self._done_build) and (self._explicit_targets or self._auto_targets or self._prebuild_funcs or self._postbuild_funcs)):
             self._run_prebuild_funcs()
             
