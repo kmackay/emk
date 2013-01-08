@@ -422,6 +422,7 @@ class Module(object):
         abs_libs = []
         syslibs = self.syslibs.copy()
         lib_paths = self.syslib_paths.copy()
+        link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
             cache = link_cache[d]
@@ -431,10 +432,11 @@ class Module(object):
                 abs_libs.append(os.path.join(d, cache._static_libpath))
             syslibs |= cache.syslibs
             lib_paths |= cache.syslib_paths
+            link_cxx = link_cxx or cache.link_cxx
 
         flags.extend(flagset)
         self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], abs_libs, \
-            lib_paths, syslibs, unique_list(flags), cxx_mode=self.link_cxx)
+            lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
     
     def _create_exe(self, produces, requires, args):
         global link_cache
@@ -447,6 +449,7 @@ class Module(object):
             abs_libs.append(emk.abspath(self._static_libpath))
         syslibs = self.syslibs.copy()
         lib_paths = self.syslib_paths.copy()
+        link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
             cache = link_cache[d]
@@ -456,7 +459,8 @@ class Module(object):
                 abs_libs.append(os.path.join(d, cache._static_libpath))
             syslibs |= cache.syslibs
             lib_paths |= cache.syslib_paths
+            link_cxx = link_cxx or cache.link_cxx
 
         flags.extend(flagset)
         self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], abs_libs, \
-            lib_paths, syslibs, unique_list(flags), cxx_mode=self.link_cxx)
+            lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
