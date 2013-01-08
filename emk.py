@@ -76,16 +76,9 @@ class _ScopeData(object):
         
         self.env = _Container()
         
-        self.default_modules = []
-        self.pre_modules = []
-        self.build_dir = "__build__"
-        self.module_paths = []
-        
         self.modtime_cache = {}
         self._do_later_funcs = []
         self._wrapped_rules = []
-        
-        self.recurse_dirs = set()
         
         if parent:
             self.default_modules = list(parent.default_modules)
@@ -93,6 +86,12 @@ class _ScopeData(object):
             self.build_dir = parent.build_dir
             self.module_paths = list(parent.module_paths)
             self.recurse_dirs = parent.recurse_dirs.copy()
+        else:
+            self.default_modules = []
+            self.pre_modules = []
+            self.build_dir = "__build__"
+            self.module_paths = []
+            self.recurse_dirs = set()
             
         self.modules = {} # map module name to instance (_Module_Instance)
         
@@ -180,13 +179,14 @@ class _RuleQueue(object):
 
 _clean_log = logging.getLogger("emk.clean")
 class _Clean_Module(object):
-    def __init__(self, scope):
-        self.remove_build_dir = True
+    def __init__(self, scope, parent=None):
+        if parent:
+            self.remove_build_dir = parent.remove_build_dir
+        else:
+            self.remove_build_dir = True
     
     def new_scope(self, scope):
-        sub = _Clean_Module(scope)
-        sub.remove_build_dir = self.remove_build_dir
-        return sub
+        return _Clean_Module(scope, self)
     
     def clean_func(self, produces, requires, args):
         build_dir = os.path.realpath(os.path.join(emk.current_dir, emk.build_dir))
@@ -211,7 +211,7 @@ class _Container(object):
     pass
 
 class _Always_Build(object):
-    def __str__(self):
+    def __repr__(self):
         return "emk.ALWAYS_BUILD"
 
 class _BuildError(Exception):
@@ -323,6 +323,8 @@ def _make_target_abspath(rel_path, scope):
     elements = _split_path(rel_path)
     if elements[0] == "$proj":
         elements[0] = scope.proj_dir
+    elif elements[0] == "$emk":
+        elements[0] = emk.emk_dir
     
     def replace_build(e):
         if e == "$build":
@@ -339,6 +341,8 @@ def _make_require_abspath(rel_path, scope):
     elements = _split_path(rel_path)
     if elements[0] == "$proj":
         elements[0] = scope.proj_dir
+    elif elements[0] == "$emk":
+        elements[0] = emk.emk_dir
 
     path = os.path.join(*elements)
     return os.path.realpath(_make_abspath(path, scope))
@@ -355,16 +359,9 @@ class EMK_Base(object):
         self.log.setLevel(logging.INFO)
         
         global _module_path
-        self._bin_path, tail = os.path.split(_module_path)
+        self._emk_path, tail = os.path.split(_module_path)
         
         self._local = threading.local()
-
-        cur_dir = os.path.realpath(os.path.abspath(os.getcwd()))
-        root_scope = _ScopeData(None, "global", cur_dir, cur_dir)
-        root_scope.module_paths.append(os.path.join(self._bin_path, "modules"))
-        self._local.current_scope = root_scope
-        
-        self._global_env = root_scope.env
         
         self._prebuild_funcs = [] # list of (scope, func)
         self._postbuild_funcs = [] # list of (scope, func)
@@ -446,6 +443,35 @@ class EMK_Base(object):
 
     def _pop_scope(self):
         self._local.current_scope = self._local.current_scope.parent
+    
+    def _import_from(self, paths, name, set_scope_dir=False):
+        if self.building:
+            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            raise _BuildError("Cannot call import_from() when building", stack)
+
+        fixed_paths = [_make_target_abspath(path, self.scope) for path in paths]
+
+        oldpath = os.getcwd()
+        fp = None
+        try:
+            fp, pathname, description = imp.find_module(name, fixed_paths)
+            mpath = os.path.realpath(os.path.abspath(pathname))
+            d, tail = os.path.split(mpath)
+            os.chdir(d)
+            if set_scope_dir:
+                self.scope.dir = d
+            return imp.load_module(name, fp, pathname, description)
+        except ImportError:
+            self.log.info("Could not import '%s' from %s", name, fixed_paths)
+        except _BuildError:
+            raise
+        except Exception as e:
+            raise _BuildError("Error importing '%s' from %s" % (name, fixed_paths), _get_exception_info())
+        finally:
+            os.chdir(oldpath)
+            if fp:
+                fp.close()
+        return None
     
     def _get_target(self, path, create_new=False):
         if path in self._targets:
@@ -842,7 +868,12 @@ class EMK_Base(object):
         # load global config
         self.scope._do_later_funcs = []
         self.scope._wrapped_rules = []
-        self.import_from([os.path.join(self._bin_path, "config")], "config")
+        search_paths = [os.path.join(self._emk_path, "config")]
+        env_paths = os.environ.get('EMK_CONFIG_DIRS')
+        if env_paths:
+            search_paths = env_paths.split(':')
+        
+        self._import_from(search_paths, "emk_config", set_scope_dir=True)
         self._run_module_post_functions()
         self._run_do_later_funcs()
     
@@ -996,10 +1027,6 @@ class EMK(EMK_Base):
         self.BuildError = _BuildError
         self.Target = _Target
         self.Rule = _Rule
-        
-        # insert "clean" module
-        self.insert_module("clean", _Clean_Module(self.scope_name))
-        self.pre_modules.append("clean")
     
     def _get_proj_env(self):
         if self.scope_name == "rules":
@@ -1028,7 +1055,7 @@ class EMK(EMK_Base):
     cleaning = property(lambda self: self._cleaning)
     building = property(lambda self: self._building)
     
-    bin_path = property(lambda self: self._bin_path)
+    emk_path = property(lambda self: self._emk_path)
     options = property(lambda self: self._options)
     explicit_targets = property(lambda self: self._explicit_targets)
     
@@ -1051,6 +1078,18 @@ class EMK(EMK_Base):
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call run() again", stack)
         self._did_run = True
+        
+        root_scope = _ScopeData(None, "global", os.path.realpath(os.path.abspath(path)), _find_project_dir())
+        root_scope.module_paths.append(os.path.join(self._emk_path, "modules"))
+        self._local.current_scope = root_scope
+        
+        self._global_env = root_scope.env
+        
+        # insert "clean" module
+        self.insert_module("clean", _Clean_Module(self.scope_name))
+        self.pre_modules.append("clean")
+        
+        self._load_config()
             
         start_time = time.time()
         self._push_scope("project", path) # need an initial "project" scope
@@ -1116,29 +1155,7 @@ class EMK(EMK_Base):
         self.log.info("Finished in %0.3f seconds" % (diff))
     
     def import_from(self, paths, name):
-        if self.building:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            raise _BuildError("Cannot call import_from() when building", stack)
-            
-        oldpath = os.getcwd()
-        fp = None
-        try:
-            fp, pathname, description = imp.find_module(name, paths)
-            mpath = os.path.realpath(os.path.abspath(pathname))
-            d, tail = os.path.split(mpath)
-            os.chdir(d)
-            return imp.load_module(name, fp, pathname, description)
-        except ImportError:
-            self.log.info("Could not import '%s' from %s", name, paths)
-        except _BuildError:
-            raise
-        except Exception as e:
-            raise _BuildError("Error importing '%s' from %s" % (name, paths), _get_exception_info())
-        finally:
-            os.chdir(oldpath)
-            if fp:
-                fp.close()
-        return None
+        return self._import_from(paths, name)
     
     def insert_module(self, name, instance):
         if self.building:
@@ -1182,7 +1199,9 @@ class EMK(EMK_Base):
         oldpath = os.getcwd()
         fp = None
         try:
-            fp, pathname, description = imp.find_module(name, self.scope.module_paths)
+            fixed_module_paths = [_make_target_abspath(path, self.scope) for path in self.scope.module_paths]
+            self.log.debug("Trying to load module %s from %s", name, fixed_module_paths)
+            fp, pathname, description = imp.find_module(name, fixed_module_paths)
             mpath = os.path.realpath(os.path.abspath(pathname))
             if not mpath in self._all_loaded_modules:
                 d, tail = os.path.split(mpath)
@@ -1418,7 +1437,6 @@ class EMK(EMK_Base):
 def setup(argv=[]):
     emk = EMK(argv)
     builtins.emk = emk
-    emk._load_config()
     return emk
 
 def main(args):
