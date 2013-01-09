@@ -17,6 +17,7 @@ import time
 import json
 import threading
 import shutil
+import multiprocessing
 
 _module_path = os.path.realpath(os.path.abspath(__file__))
 
@@ -412,7 +413,6 @@ class EMK_Base(object):
                 if key == "explicit_target":
                     self._explicit_targets.add(val)
                 else:
-                    self._options[key] = val
                     if key == "log":
                         level = val.lower()
                         if level in log_levels:
@@ -420,13 +420,19 @@ class EMK_Base(object):
                         else:
                             self.log.error("Unknown log level '%s'", level)
                     elif key == "threads":
-                        try:
-                            num = int(val, base=0)
-                            if num < 1:
-                                num = 1
-                            self._build_threads = num
-                        except ValueError:
-                            self.log.error("Thread count '%s' cannot be converted to an integer", val)
+                        if val == "x":
+                            val = multiprocessing.cpu_count()
+                        else:
+                            try:
+                                val = int(val, base=0)
+                                if val < 1:
+                                    val = 1
+                            except ValueError:
+                                self.log.error("Thread count '%s' cannot be converted to an integer", val)
+                                val = 1
+                        self._build_threads = val
+                        self.log.info("Using %d threads", val)
+                    self._options[key] = val
             else:
                 self._explicit_targets.add(arg)
         
