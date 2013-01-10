@@ -67,6 +67,7 @@ class Module(object):
             self.cxx.source_files = parent.cxx.source_files.copy()
             
             self.autodetect = parent.autodetect
+            self.autodetect_from_targets = parent.autodetect_from_targets
             self.excludes = parent.excludes.copy()
         else:
             self.compiler = _GccCompiler()
@@ -88,6 +89,7 @@ class Module(object):
             self.cxx.source_files = set()
         
             self.autodetect = True
+            self.autodetect_from_targets = True
             self.excludes = set()
     
     def new_scope(self, scope):
@@ -103,19 +105,23 @@ class Module(object):
         if emk.cleaning:
             return
         
-        if self.autodetect:
-            files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
-            for file_path in files:
-                if self._matches_exts(file_path, self.c.exts):
-                    self.c.source_files.add(file_path)
-                if self._matches_exts(file_path, self.cxx.exts):
-                    self.cxx.source_files.add(file_path)
-                    
         emk.do_prebuild(self._prebuild)
     
     def _prebuild(self):
         c_sources = set()
         cxx_sources = set()
+        
+        if self.autodetect:
+            files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
+            if self.autodetect_from_targets:
+                target_files = [t for t in emk.local_targets.keys()]
+                files.extend(target_files)
+            for file_path in files:
+                if self._matches_exts(file_path, self.c.exts):
+                    self.c.source_files.add(file_path)
+                if self._matches_exts(file_path, self.cxx.exts):
+                    self.cxx.source_files.add(file_path)
+        
         for f in self.c.source_files:
             if f in self.excludes:
                 continue
