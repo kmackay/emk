@@ -73,8 +73,6 @@ class _ScopeData(object):
         self.dir = dir
         self.proj_dir = proj_dir
         
-        self.env = _Container()
-        
         self.modtime_cache = {}
         self._do_later_funcs = []
         self._wrapped_rules = []
@@ -205,9 +203,6 @@ class _Module_Instance(object):
         self.name = name
         self.instance = instance
         self.mod = mod
-
-class _Container(object):
-    pass
 
 class _Always_Build(object):
     def __repr__(self):
@@ -1027,22 +1022,9 @@ class EMK(EMK_Base):
     def __init__(self, args):
         super(EMK, self).__init__(args)
         
-        self.Container = _Container
         self.BuildError = _BuildError
         self.Target = _Target
         self.Rule = _Rule
-    
-    def _get_proj_env(self):
-        if self.scope_name == "rules":
-            return self.scope.parent.env
-        else:
-            return self.scope.env
-
-    def _get_env(self):
-        if self.scope_name == "global":
-            return self._global_env
-        else:
-            return self.scope.env
 
     def _set_build_dir(self, dir):
         self.scope.build_dir = dir
@@ -1073,10 +1055,6 @@ class EMK(EMK_Base):
     
     local_targets = property(lambda self: self.scope.targets)
     
-    global_env = property(lambda self: self._global_env)
-    proj_env = property(_get_proj_env)
-    env = property(_get_env)
-    
     def run(self, path):
         if self._did_run:
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
@@ -1086,8 +1064,6 @@ class EMK(EMK_Base):
         root_scope = _ScopeData(None, "global", os.path.realpath(os.path.abspath(path)), _find_project_dir())
         root_scope.module_paths.append(os.path.join(self._emk_path, "modules"))
         self._local.current_scope = root_scope
-        
-        self._global_env = root_scope.env
         
         # insert "clean" module
         self.insert_module("clean", _Clean_Module(self.scope_name))
