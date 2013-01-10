@@ -872,7 +872,7 @@ class EMK_Base(object):
         if env_paths:
             search_paths = env_paths.split(':')
         
-        self._import_from(search_paths, "emk_config", set_scope_dir=True)
+        self._import_from(search_paths, "emk_global", set_scope_dir=True)
         self._run_module_post_functions()
         self._run_do_later_funcs()
     
