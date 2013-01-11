@@ -93,6 +93,10 @@ class _ScopeData(object):
         self.modules = {} # map module name to instance (_Module_Instance)
         
         self.targets = {} # map original target name->target for the current scope
+    
+    def prepare_do_later():
+        self._do_later_funcs = []
+        self._wrapped_rules = []
 
 class _RuleQueue(object):
     def __init__(self, num_threads):
@@ -704,9 +708,7 @@ class EMK_Base(object):
                         os.chdir(rule.scope.dir)
                     produces = [p.abs_path for p in rule.produces]
             
-                    self.scope._do_later_funcs = []
-                    self.scope._wrapped_rules = []
-                
+                    self.scope.prepare_do_later()
                     rule.func(produces, rule.requires, rule.args)
                     self._run_do_later_funcs()
 
@@ -824,8 +826,7 @@ class EMK_Base(object):
                     self._local.current_scope = scope
                     os.chdir(scope.dir)
                 
-                    self.scope._do_later_funcs = []
-                    self.scope._wrapped_rules = []
+                    self.scope.prepare_do_later()
                     f()
                     self._run_do_later_funcs()
                 
@@ -849,8 +850,7 @@ class EMK_Base(object):
                 self._local.current_scope = scope
                 os.chdir(scope.dir)
                 
-                self.scope._do_later_funcs = []
-                self.scope._wrapped_rules = []
+                self.scope.prepare_do_later()
                 f()
                 self._run_do_later_funcs()
         except _BuildError:
@@ -865,8 +865,7 @@ class EMK_Base(object):
     
     def _load_config(self):
         # load global config
-        self.scope._do_later_funcs = []
-        self.scope._wrapped_rules = []
+        self.scope.prepare_do_later()
         search_paths = [os.path.join(self._emk_path, "config")]
         env_paths = os.environ.get('EMK_CONFIG_DIRS')
         if env_paths:
@@ -887,11 +886,8 @@ class EMK_Base(object):
                 
                 self._push_scope("project", path)
                 
-                self.scope._do_later_funcs = []
-                self.scope._wrapped_rules = []
-                
+                self.scope.prepare_do_later()
                 self.import_from([path], "emk_project")
-                
                 self._run_module_post_functions()
                 self._run_do_later_funcs()
                 
@@ -961,19 +957,14 @@ class EMK_Base(object):
         
         self._push_scope("rules", path)
         
-        self.scope._do_later_funcs = []
-        self.scope._wrapped_rules = []
-        
+        self.scope.prepare_do_later()
         self.modules(*self.scope.pre_modules) # load preload modules
-
-        # load emk_rules.py, or the default modules if it cannot be loaded
         if not self.import_from([path], "emk_rules"):
             self.modules(*self.scope.default_modules)
+        self._run_do_later_funcs()
         
-        # run module post_rules functions
+        self.scope.prepare_do_later()
         self._run_module_post_functions()
-        
-        # execute do_later functions
         self._run_do_later_funcs()
         
         self._known_build_dirs[path] = self.scope.build_dir

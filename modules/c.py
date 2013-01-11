@@ -114,7 +114,8 @@ class Module(object):
         if self.autodetect:
             files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
             if self.autodetect_from_targets:
-                target_files = [t for t in emk.local_targets.keys()]
+                target_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts) or self._matches_exts(t, self.cxx.exts)]
+                log.info("Detected generated files: %s", target_files)
                 files.extend(target_files)
             for file_path in files:
                 if self._matches_exts(file_path, self.c.exts):
