@@ -18,10 +18,19 @@ class Module(object):
             self.autodetect_from_targets = parent.autodetect_from_targets
             self.excludes = parent.excludes.copy()
             
+            self.classes = parent.classes.copy()
+            self.classes_nosrc = parent.classes_nosrc.copy()
+            self.exe_classes = parent.exe_classes.copy()
+            self.non_exe_classes = parent.non_exe_classes.copy()
+            self.autodetect_exe = parent.autodetect_exe
+            
+            self.jarname = parent.jarname
+            self.jar_in_jar = parent.jar_in_jar
+            
             self.depdirs = parent.depdirs.copy()
             self.projdirs = parent.projdirs.copy()
-            self.syslibs = parent.syslibs.copy()
-            self.syslib_paths = parent.syslib_paths.copy()
+            self.sysjars = parent.sysjars.copy()
+            self.sysjar_paths = parent.sysjar_paths.copy()
         else:
             self.compile_flags = []
             self.exts = set([".java"])
@@ -31,10 +40,19 @@ class Module(object):
             self.autodetect_from_targets = True
             self.excludes = set()
             
+            self.classes = {}
+            self.classes_nosrc = set()
+            self.exe_classes = set()
+            self.non_exe_classes = set()
+            self.autodetect_exe = True
+            
+            self.jarname = None
+            self.jar_in_jar = False
+            
             self.depdirs = set()
             self.projdirs = set()
-            self.syslibs = set()
-            self.syslib_paths = set()
+            self.sysjars = set()
+            self.sysjar_paths = set()
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -64,8 +82,8 @@ class Module(object):
                     self.source_files.add(file_path)
         
         for f in self.source_files:
-            if f in self.excludes:
-                continue
-            sources.add(f)
+            if not f in self.excludes:
+                sources.add(f)
+            
 
         # TODO
