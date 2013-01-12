@@ -14,10 +14,8 @@ class _GccCompiler(object):
     def load_extra_dependencies(self, path):
         try:
             with open(path) as f:
-                data = f.read()
-                data = data.replace("\\\n", "")
-                items = shlex.split(data)
-                return items[2:] # we just want the included files
+                items = [s for s in f.read().split('\n') if s]
+                return items
         except IOError:
             pass
     
@@ -32,6 +30,19 @@ class _GccCompiler(object):
         args.extend(utils.flatten_flags(flags))
         args.extend(["-o", dest, "-c", source])
         utils.call(*args)
+        
+        try:
+            with open(dep_file, "r+") as f:
+                data = f.read()
+                data = data.replace("\\\n", "")
+                items = shlex.split(data)
+                unique_items = set(items[2:])
+                f.seek(0)
+                f.truncate(0)
+                f.write('\n'.join(unique_items))
+        except IOError:
+            log.error("Failed to fix up depfile %s", dep_file)
+            utils.rm(dep_file)
         
     def compile_c(self, source, dest, dep_file, includes, defines, flags):
         self.compile(self.c_path, source, dest, dep_file, includes, defines, flags)
@@ -114,9 +125,15 @@ class Module(object):
         if self.autodetect:
             files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
             if self.autodetect_from_targets:
-                target_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts) or self._matches_exts(t, self.cxx.exts)]
-                log.info("Detected generated files: %s", target_files)
-                files.extend(target_files)
+                target_c_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts)]
+                if target_c_files:
+                    log.debug("Detected generated C files: %s", target_c_files)
+                    self.c.source_files.update(target_c_files)
+                    
+                target_cxx_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.cxx.exts)]
+                if target_cxx_files:
+                    log.debug("Detected generated C++ files: %s", target_cxx_files)
+                    self.cxx.source_files.update(target_cxx_files)
             for file_path in files:
                 if self._matches_exts(file_path, self.c.exts):
                     self.c.source_files.add(file_path)

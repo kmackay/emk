@@ -50,6 +50,7 @@ class _Rule(object):
         self.secondary_deps = set()
         
         self._required_targets = []
+        self._remaining_unbuilt_reqs = 0
         self._want_build = False
         self._built = False
         self.stack = []
@@ -94,7 +95,7 @@ class _ScopeData(object):
         
         self.targets = {} # map original target name->target for the current scope
     
-    def prepare_do_later():
+    def prepare_do_later(self):
         self._do_later_funcs = []
         self._wrapped_rules = []
 
@@ -178,6 +179,9 @@ class _RuleQueue(object):
             self.errors.append(err)
             self.join_cond.notifyAll()
 
+class _Container(object):
+    pass
+
 _clean_log = logging.getLogger("emk.clean")
 class _Clean_Module(object):
     def __init__(self, scope, parent=None):
@@ -250,9 +254,9 @@ def _mkdirs(path):
         else:
             raise
 
-def _try_call_method(obj, name):
+def _try_call_method(mod, name):
     try:
-        func = getattr(obj, name)
+        func = getattr(mod.instance, name)
     except AttributeError:
         return
 
@@ -261,7 +265,7 @@ def _try_call_method(obj, name):
     except _BuildError:
         raise
     except Exception:
-        raise _BuildError("Error running module.%s()" % (name), _get_exception_info())
+        raise _BuildError("Error running %s.%s()" % (mod.name, name), _get_exception_info())
 
 def _get_exception_info():
     t, value, trace = sys.exc_info()
@@ -336,6 +340,8 @@ def _make_target_abspath(rel_path, scope):
 def _make_require_abspath(rel_path, scope):
     if rel_path is emk.ALWAYS_BUILD:
         return emk.ALWAYS_BUILD
+    if os.path.isabs(rel_path):
+        return rel_path
     elements = _split_path(rel_path)
     if elements[0] == "$proj":
         elements[0] = scope.proj_dir
@@ -642,13 +648,13 @@ class EMK_Base(object):
                     target._built = True
         elif not target.rule._want_build:
             target.rule._want_build = True
-            have_unbuilt_reqs = False
+            target.rule._remaining_unbuilt_reqs = 0
             for req in target.rule._required_targets:
                 self._examine_target(req)
                 if not req._built: # we can't build this rule immediately
-                    have_unbuilt_reqs = True
+                    target.rule._remaining_unbuilt_reqs += 1
 
-            if not have_unbuilt_reqs:
+            if not target.rule._remaining_unbuilt_reqs:
                 # can build this rule immediately
                 self._add_buildable_rule(target.rule)
     
@@ -667,13 +673,9 @@ class EMK_Base(object):
                 for r in t._required_by:
                     if not r._want_build:
                         continue
-
-                    can_build = True
-                    for req in r._required_targets:
-                        if not req._built:
-                            can_build = False
-                            break
-                    if can_build:
+                    
+                    r._remaining_unbuilt_reqs -= 1
+                    if r._remaining_unbuilt_reqs == 0:
                         self._add_buildable_rule(r)
     
     def _build_thread_func(self, special):
@@ -806,7 +808,7 @@ class EMK_Base(object):
         except _BuildError:
             raise
         except Exception as e:
-            raise _BuildError("Error running do_later function", _get_exception_info())
+            raise _BuildError("Error running do_later function (in %s)" % (self.scope.dir), _get_exception_info())
         
         for wrapper in self.scope._wrapped_rules:
             self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.stack)
@@ -840,7 +842,7 @@ class EMK_Base(object):
             except _BuildError:
                 raise
             except Exception as e:
-                raise _BuildError("Error running prebuild function", _get_exception_info())
+                raise _BuildError("Error running prebuild function (in %s)" % (self.scope.dir), _get_exception_info())
     
     def _run_postbuild_funcs(self):
         funcs = self._postbuild_funcs
@@ -856,12 +858,12 @@ class EMK_Base(object):
         except _BuildError:
             raise
         except Exception as e:
-            raise _BuildError("Error running postbuild function", _get_exception_info())
+            raise _BuildError("Error running postbuild function (in %s)" % (self.scope.dir), _get_exception_info())
     
     def _run_module_post_functions(self):
         fname = "post_" + self.scope.scope_type
         for mod in self.scope.modules.values():
-            _try_call_method(mod.instance, fname)
+            _try_call_method(mod, fname)
     
     def _load_config(self):
         # load global config
@@ -1016,6 +1018,7 @@ class EMK(EMK_Base):
         self.BuildError = _BuildError
         self.Target = _Target
         self.Rule = _Rule
+        self.Container = _Container
 
     def _set_build_dir(self, dir):
         self.scope.build_dir = dir
@@ -1138,8 +1141,9 @@ class EMK(EMK_Base):
             self.log.warning("Cannot insert over pre-existing '%s' module", name)
             return None
         
-        _try_call_method(instance, "load_" + self.scope.scope_type)
-        self.scope.modules[name] = _Module_Instance(name, instance, None)
+        mod = _Module_Instance(name, instance, None)
+        _try_call_method(mod, "load_" + self.scope.scope_type)
+        self.scope.modules[name] = mod
         return instance
 
     def module(self, name):
@@ -1162,8 +1166,9 @@ class EMK(EMK_Base):
                 except Exception:
                     raise _BuildError("Error creating new scope for module %s" % (name), _get_exception_info())
                 
-                _try_call_method(instance, "load_" + self.scope_name)
-                self.scope.modules[name] = _Module_Instance(name, instance, cur.modules[name].mod)
+                mod = _Module_Instance(name, instance, cur.modules[name].mod)
+                _try_call_method(mod, "load_" + self.scope_name)
+                self.scope.modules[name] = mod
                 return instance
             cur = cur.parent
         
@@ -1181,8 +1186,9 @@ class EMK(EMK_Base):
                 self._all_loaded_modules[mpath] = imp.load_module(name, fp, pathname, description)
             
             instance = self._all_loaded_modules[mpath].Module(self.scope_name)
-            _try_call_method(instance, "load_" + self.scope_name)
-            self.scope.modules[name] = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
+            mod = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
+            _try_call_method(mod, "load_" + self.scope_name)
+            self.scope.modules[name] = mod
             return instance
         except ImportError:
             pass
