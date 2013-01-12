@@ -304,52 +304,20 @@ def _format_decorator_stack(stack):
     result.extend(_format_stack(stack[1:]))
     return result
 
-def _split_path(path):
-    elements = []
-    while True:
-        rest, element = os.path.split(path)
-        if rest == path:
-            if path: elements.append(path)
-            break
-        elements.append(element)
-        path = rest
-    elements.reverse()
-    return elements
-
 def _make_abspath(rel_path, scope):
     if os.path.isabs(rel_path):
         return rel_path
     return os.path.join(scope.dir, rel_path)
 
 def _make_target_abspath(rel_path, scope):
-    elements = _split_path(rel_path)
-    if elements[0] == "$proj":
-        elements[0] = scope.proj_dir
-    elif elements[0] == "$emk":
-        elements[0] = emk.emk_dir
-    
-    def replace_build(e):
-        if e == "$build":
-            return scope.build_dir
-        return e
-    elements = [replace_build(e) for e in elements]
-    
-    path = os.path.join(*elements)
+    path = rel_path.replace(emk.build_dir_placeholder, scope.build_dir)
     return os.path.realpath(_make_abspath(path, scope))
 
 def _make_require_abspath(rel_path, scope):
     if rel_path is emk.ALWAYS_BUILD:
         return emk.ALWAYS_BUILD
-    if os.path.isabs(rel_path):
-        return rel_path
-    elements = _split_path(rel_path)
-    if elements[0] == "$proj":
-        elements[0] = scope.proj_dir
-    elif elements[0] == "$emk":
-        elements[0] = emk.emk_dir
 
-    path = os.path.join(*elements)
-    return os.path.realpath(_make_abspath(path, scope))
+    return os.path.realpath(_make_abspath(rel_path, scope))
 
 class EMK_Base(object):
     def __init__(self, args):
@@ -359,8 +327,9 @@ class EMK_Base(object):
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
         self.log.propagate = False
-        
         self.log.setLevel(logging.INFO)
+        
+        self.build_dir_placeholder = "$:build:$"
         
         global _module_path
         self._emk_path, tail = os.path.split(_module_path)
@@ -494,24 +463,24 @@ class EMK_Base(object):
             return target
 
     def _resolve_build_dirs(self, dirs, ignore_errors=False):
-        # fix paths (convert $build)
+        # fix paths (convert $:build:$)
         updated_paths = []
         for path in dirs:
             if path is self.ALWAYS_BUILD:
                 updated_paths.append(path)
                 continue
 
-            elements = _split_path(path)
-            if "$build" in elements:
-                i = elements.index("$build")
-                root_path = os.path.join(*(elements[:i]))
-                if root_path in self._known_build_dirs:
-                    elements[i] = self._known_build_dirs[root_path]
-                    n = os.path.join(*elements)
+            begin, build, end = path.partition(self.build_dir_placeholder)
+            if build:
+                d = os.path.dirname(begin)
+                if d in self._known_build_dirs:
+                    n = begin + self._known_build_dirs[d] + end
                     updated_paths.append(n)
-                    self.log.debug("Fixed $build path: %s => %s" % (path, n))
+                    self.log.debug("Fixed %s in path: %s => %s" % (self.build_dir_placeholder, path, n))
                 elif not ignore_errors:
-                    raise _BuildError("Could not resolve $build for path %s" % (path))
+                    raise _BuildError("Could not resolve %s for path %s" % (self.build_dir_placeholder, path))
+                else:
+                    updated_paths.append(None)
             else:
                 updated_paths.append(path)
         return updated_paths
@@ -619,7 +588,7 @@ class EMK_Base(object):
         self._allowed_nonexistent = set(self._resolve_build_dirs(self._allowed_nonexistent, ignore_errors=True))
     
     def _fix_requires_rule(self):
-        self._requires_rule = set(self._resolve_build_dirs(self._requires_rule, ignore_errors=True))
+        self._requires_rule = set(self._resolve_build_dirs(self._requires_rule))
     
     def _toplevel_examine_target(self, target):
         if not target in self._toplevel_examined_targets:
@@ -1366,6 +1335,9 @@ class EMK(EMK_Base):
     
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
+    
+    def resolve_build_dirs(self, *paths, ignore_errors=False):
+        return self._resolve_build_dirs(paths, ignore_errors)
 
 def setup(argv=[]):
     emk = EMK(argv)

@@ -123,7 +123,6 @@ class Module(object):
         cxx_sources = set()
         
         if self.autodetect:
-            files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
             if self.autodetect_from_targets:
                 target_c_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts)]
                 if target_c_files:
@@ -134,6 +133,8 @@ class Module(object):
                 if target_cxx_files:
                     log.debug("Detected generated C++ files: %s", target_cxx_files)
                     self.cxx.source_files.update(target_cxx_files)
+                    
+            files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
             for file_path in files:
                 if self._matches_exts(file_path, self.c.exts):
                     self.c.source_files.add(file_path)

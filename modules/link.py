@@ -251,7 +251,7 @@ class Module(object):
         self.syslib_paths = set([emk.abspath(d) for d in self.syslib_paths])
         
         for d in self.projdirs:
-            self.depdirs.add(os.path.join("$proj", d))
+            self.depdirs.add(os.path.join(emk.proj_dir, d))
         self.projdirs.clear()
         
         for d in self.depdirs:
