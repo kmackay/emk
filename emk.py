@@ -332,7 +332,7 @@ class EMK_Base(object):
         self.build_dir_placeholder = "$:build:$"
         
         global _module_path
-        self._emk_path, tail = os.path.split(_module_path)
+        self._emk_dir, tail = os.path.split(_module_path)
         
         self._local = threading.local()
         
@@ -837,7 +837,7 @@ class EMK_Base(object):
     def _load_config(self):
         # load global config
         self.scope.prepare_do_later()
-        search_paths = [os.path.join(self._emk_path, "config")]
+        search_paths = [os.path.join(self._emk_dir, "config")]
         env_paths = os.environ.get('EMK_CONFIG_DIRS')
         if env_paths:
             search_paths = env_paths.split(':')
@@ -1004,7 +1004,7 @@ class EMK(EMK_Base):
     cleaning = property(lambda self: self._cleaning)
     building = property(lambda self: self._building)
     
-    emk_path = property(lambda self: self._emk_path)
+    emk_dir = property(lambda self: self._emk_dir)
     options = property(lambda self: self._options)
     explicit_targets = property(lambda self: self._explicit_targets)
     
@@ -1025,7 +1025,7 @@ class EMK(EMK_Base):
         self._did_run = True
         
         root_scope = _ScopeData(None, "global", os.path.realpath(os.path.abspath(path)), _find_project_dir())
-        root_scope.module_paths.append(os.path.join(self._emk_path, "modules"))
+        root_scope.module_paths.append(os.path.join(self._emk_dir, "modules"))
         self._local.current_scope = root_scope
         
         # insert "clean" module
