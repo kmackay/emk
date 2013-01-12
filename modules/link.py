@@ -188,6 +188,9 @@ class Module(object):
             self.exeflags = parent.exeflags.copy()
             self.local_exeflags = list(parent.local_exeflags)
             
+            self.static_libs = parent.static_libs.copy()
+            self.local_static_libs = parent.local_static_libs.copy()
+            
             self.depdirs = parent.depdirs.copy()
             self.projdirs = parent.projdirs.copy()
             self.syslibs = parent.syslibs.copy()
@@ -224,6 +227,9 @@ class Module(object):
             self.local_libflags = []
             self.exeflags = set()
             self.local_exeflags = []
+            
+            self.static_libs = set()
+            self.local_static_libs = set()
             
             self.depdirs = set()
             self.projdirs = set()
@@ -273,7 +279,10 @@ class Module(object):
                 self._depended_by.add(d)
                 self._get_needed_by(d, needed_by)
         
-        lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
+        lib_deps = set()
+        for d in self._all_depdirs:
+            lib_deps.add(os.path.join(d, "link.__static_lib__"))
+            lib_deps.update(link_cache[d].static_libs)
         for d in needed_by:
             cached = link_cache[d]
             cached._all_depdirs.update(self._all_depdirs)
@@ -302,6 +311,8 @@ class Module(object):
             return False
 
     def _create_rules(self):
+        global link_cache
+        
         exe_objs = self.exe_objs
         all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()])
         
@@ -322,7 +333,11 @@ class Module(object):
         lib_objs = all_objs - exe_objs
         
         emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], utils.mark_updated, threadsafe=True)
-        lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
+        
+        lib_deps = set()
+        for d in self._all_depdirs:
+            lib_deps.add(os.path.join(d, "link.__static_lib__"))
+            lib_deps.update(link_cache[d].static_libs)
         emk.depend("link.__exe_deps__", *lib_deps)
         
         dirname = os.path.basename(emk.current_dir)
@@ -381,13 +396,16 @@ class Module(object):
         global link_cache
         
         objs = []
-        other_libs = []
+        other_libs = set()
         if args["all_libs"]:
-            other_libs.append(emk.abspath(self._static_libpath))
+            other_libs.add(emk.abspath(self._static_libpath))
+            other_libs |= self.local_static_libs
+            other_libs |= self.static_libs
             for d in self._all_depdirs:
                 cache = link_cache[d]
                 if cache._static_libpath:
-                    other_libs.append(os.path.join(d, cache._static_libpath))
+                    other_libs.add(os.path.join(d, cache._static_libpath))
+                other_libs |= cache.static_libs
         else:
             objs = requires
         
@@ -399,7 +417,7 @@ class Module(object):
         flags = self.linker.shlib_opts() + self.local_flags + self.local_libflags
         flagset = self.flags | self.libflags
 
-        abs_libs = []
+        abs_libs = self.local_static_libs | self.static_libs
         syslibs = self.syslibs.copy()
         lib_paths = self.syslib_paths.copy()
         link_cxx = self.link_cxx
@@ -409,13 +427,14 @@ class Module(object):
             flagset |= cache.flags
             flagset |= cache.libflags
             if cache._static_libpath:
-                abs_libs.append(os.path.join(d, cache._static_libpath))
+                abs_libs.add(os.path.join(d, cache._static_libpath))
+            abs_libs |= cache.static_libs
             syslibs |= cache.syslibs
             lib_paths |= cache.syslib_paths
             link_cxx = link_cxx or cache.link_cxx
 
         flags.extend(flagset)
-        self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], abs_libs, \
+        self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
             lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
     
     def _create_exe(self, produces, requires, args):
@@ -424,9 +443,9 @@ class Module(object):
         flags = self.linker.exe_opts() + self.local_flags + self.local_exeflags
         flagset = self.flags | self.exeflags
 
-        abs_libs = []
+        abs_libs = self.local_static_libs | self.static_libs
         if self._static_libpath:
-            abs_libs.append(emk.abspath(self._static_libpath))
+            abs_libs.add(emk.abspath(self._static_libpath))
         syslibs = self.syslibs.copy()
         lib_paths = self.syslib_paths.copy()
         link_cxx = self.link_cxx
@@ -436,11 +455,12 @@ class Module(object):
             flagset |= cache.flags
             flagset |= cache.exeflags
             if cache._static_libpath:
-                abs_libs.append(os.path.join(d, cache._static_libpath))
+                abs_libs.add(os.path.join(d, cache._static_libpath))
+            abs_libs |= cache.static_libs
             syslibs |= cache.syslibs
             lib_paths |= cache.syslib_paths
             link_cxx = link_cxx or cache.link_cxx
 
         flags.extend(flagset)
-        self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], abs_libs, \
+        self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
             lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
