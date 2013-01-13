@@ -37,6 +37,7 @@ class _Target(object):
         self._required_by = set()
         self._built = False
         self._visited = False
+        self._untouched = False
 
 class _Rule(object):
     def __init__(self, requires, args, func, threadsafe, scope):
@@ -201,7 +202,7 @@ class _Clean_Module(object):
                 shutil.rmtree(build_dir, ignore_errors=True)
         else:
             _clean_log.info("Not removing directory %s", build_dir)
-        emk.mark_updated(*produces)
+        emk.mark_exists(*produces)
     
     def post_rules(self):
         emk.rule(["clean"], [emk.ALWAYS_BUILD], self.clean_func, threadsafe=True)
@@ -640,12 +641,23 @@ class EMK_Base(object):
         with self._lock:
             for t in rule.produces:
                 abs_path = t.abs_path
-                exists, t.mod_time = self._get_mod_time(abs_path, lock=False)
+                exists, m = self._get_mod_time(abs_path, lock=False)
+                
                 if not exists:
                     raise _BuildError("%s should have been produced by the rule" % (abs_path), rule.stack)
-                if not abs_path in self._modtime_cache:
-                    self._modtime_cache[abs_path] = now
-                    rule.scope.modtime_cache[abs_path] = now
+                
+                if abs_path in self._modtime_cache:
+                    if not t._untouched:
+                        self._modtime_cache[abs_path][1] = now
+                else:
+                    if t._untouched:
+                        cache = [False, 0, {}]
+                    else:
+                        cache = [False, now, {}]
+                    self._modtime_cache[abs_path] = cache
+                    rule.scope.modtime_cache[abs_path] = cache
+                
+                t.mod_time = self._modtime_cache[abs_path][1]
                 t._built = True
 
             for t in rule.produces:
@@ -878,15 +890,21 @@ class EMK_Base(object):
         if filepath is self.ALWAYS_BUILD:
             return (True, float("inf"))
 
+        cache = None
         if lock:
             with self._lock:
                 if filepath in self._modtime_cache:
-                    return (True, self._modtime_cache[filepath])
+                    cache = self._modtime_cache[filepath][0:2]
         elif filepath in self._modtime_cache:
-            return (True, self._modtime_cache[filepath])
+            cache = self._modtime_cache[filepath][0:2]
 
+        if cache and cache[0]:
+            return cache
         try:
-            return (True, os.path.getmtime(filepath))
+            modtime = os.path.getmtime(filepath)
+            if cache:
+                return (True, cache[1])
+            return (True, modtime)
         except Exception:
             return (False, 0)
     
@@ -899,7 +917,7 @@ class EMK_Base(object):
                 for entry, value in cache.items():
                     if entry in self._modtime_cache:
                         existing_value = self._modtime_cache[entry]
-                        if value > existing_value:
+                        if value[1] > existing_value[1]:
                             self._modtime_cache[entry] = value
                         else:
                             value = existing_value
@@ -1321,23 +1339,27 @@ class EMK(EMK_Base):
         with self._lock:
             self._postbuild_funcs.append((self.scope, func))
     
-    def mark_updated(self, *paths):
-        now = time.time()
+    def mark_exists(self, *paths):
         with self._lock:
             for path in paths:
-                self.log.debug("Marking %s as updated", path)
+                self.log.debug("Marking %s as existing", path)
                 abs_path = _make_target_abspath(path, self.scope)
-                self._modtime_cache[abs_path] = now
-                self.scope.modtime_cache[abs_path] = now
+                if abs_path in self._modtime_cache:
+                    self._modtime_cache[abs_path][0] = True
+                else:
+                    cache = [True, 0, {}]
+                    self._modtime_cache[abs_path] = cache
+                    self.scope.modtime_cache[abs_path] = cache
     
     def mark_untouched(self, paths):
         with self._lock:
             for path in paths:
-                self.log.debug("Marking %s as untouched", path)
                 abs_path = _make_target_abspath(path, self.scope)
-                if not os.path.exists(abs_path) and not abs_path in self._modtime_cache:
-                    self._modtime_cache[abs_path] = 0
-                    self.scope.modtime_cache[abs_path] = 0
+                if abs_path in self._targets:
+                    self.log.debug("Marking %s as untouched", abs_path)
+                    self._targets[abs_path]._untouched = True
+                else:
+                    self.log.warning("Not marking %s as untouched since it is not a target", abs_path)
     
     def log_print(self, format, *args):
         d = {'adorn':False}
@@ -1354,6 +1376,15 @@ class EMK(EMK_Base):
     
     def fix_stack(self, stack):
         return _format_stack(_filter_stack(stack))
+    
+    def cached_data(self, path):
+        with self._lock:
+            abs_path = _make_target_abspath(path, self.scope)
+            if not abs_path in self._modtime_cache:
+                cache = [False, 0, {}]
+                self._modtime_cache[abs_path] = cache
+                self.scope.modtime_cache[abs_path] = cache
+            return self._modtime_cache[abs_path][2]
 
 def setup(argv=[]):
     emk = EMK(argv)

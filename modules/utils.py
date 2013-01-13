@@ -80,5 +80,5 @@ class Module(object):
             raise emk.BuildError("Subprocess '%s' returned %s" % (' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
-    def mark_updated(self, produces, requires, args):
-        emk.mark_updated(*produces)
+    def mark_exists(self, produces, requires, args):
+        emk.mark_exists(*produces)
