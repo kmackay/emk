@@ -637,8 +637,8 @@ class EMK_Base(object):
         self._buildable_rules.put(rule)
 
     def _done_rule(self, rule, built):
-        now = time.time()
         with self._lock:
+            now = time.time()
             for t in rule.produces:
                 abs_path = t.abs_path
                 exists, m = self._get_mod_time(abs_path, lock=False)
@@ -653,9 +653,9 @@ class EMK_Base(object):
                     if t._untouched:
                         cache = [False, 0, {}]
                     elif built:
-                        cache = [False, m, {}]
-                    else
                         cache = [False, now, {}]
+                    else:
+                        cache = [False, m, {}]
                     self._modtime_cache[abs_path] = cache
                     rule.scope.modtime_cache[abs_path] = cache
                 
