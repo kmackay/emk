@@ -156,6 +156,7 @@ class Module(object):
         
         self._all_depdirs = set()
         self._depended_by = set()
+        self._all_static_libs = set()
         self._static_libpath = None
         
         if parent:
@@ -259,6 +260,8 @@ class Module(object):
         for d in self.projdirs:
             self.depdirs.add(os.path.join(emk.proj_dir, d))
         self.projdirs.clear()
+
+        self._all_static_libs.update(self.static_libs)
         
         for d in self.depdirs:
             abspath = emk.abspath(d)
@@ -266,6 +269,7 @@ class Module(object):
             if abspath in link_cache:
                 dep_link = link_cache[abspath]
                 self._all_depdirs.update(dep_link._all_depdirs)
+                self._all_static_libs.update(dep_link._all_static_libs)
                 dep_link._depended_by.add(emk.current_dir)
             elif abspath in need_depdirs:
                 need_depdirs[abspath].add(emk.current_dir)
@@ -278,15 +282,14 @@ class Module(object):
             for d in need_depdirs[emk.current_dir]:
                 self._depended_by.add(d)
                 self._get_needed_by(d, needed_by)
-        
-        lib_deps = set()
-        for d in self._all_depdirs:
-            lib_deps.add(os.path.join(d, "link.__static_lib__"))
-            lib_deps.update(link_cache[d].static_libs)
+
+        lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         for d in needed_by:
             cached = link_cache[d]
             cached._all_depdirs.update(self._all_depdirs)
+            cached._all_static_libs.update(self._all_static_libs)
             emk.depend(os.path.join(d, "link.__exe_deps__"), *lib_deps)
+            emk.depend(os.path.join(d, "link.__exe_deps__"), *self._all_static_libs)
         
         if self.detect_exe == "exact":
             emk.require_rule("link.__static_lib__", "link.__lib_in_lib__", "link.__shared_lib__", "link.__exe_deps__", "link.__exes__")
@@ -334,11 +337,9 @@ class Module(object):
         
         emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], utils.mark_updated, threadsafe=True)
         
-        lib_deps = set()
-        for d in self._all_depdirs:
-            lib_deps.add(os.path.join(d, "link.__static_lib__"))
-            lib_deps.update(link_cache[d].static_libs)
+        lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         emk.depend("link.__exe_deps__", *lib_deps)
+        emk.depend("link.__exe_deps__", *self._all_static_libs)
         
         dirname = os.path.basename(emk.current_dir)
         making_static_lib = False

@@ -310,6 +310,8 @@ def _make_abspath(rel_path, scope):
     return os.path.join(scope.dir, rel_path)
 
 def _make_target_abspath(rel_path, scope):
+    if rel_path.startswith(emk.proj_dir_placeholder):
+        rel_path = rel_path.replace(emk.proj_dir_placeholder, scope.proj_dir, 1)
     path = rel_path.replace(emk.build_dir_placeholder, scope.build_dir)
     return os.path.realpath(_make_abspath(path, scope))
 
@@ -317,6 +319,8 @@ def _make_require_abspath(rel_path, scope):
     if rel_path is emk.ALWAYS_BUILD:
         return emk.ALWAYS_BUILD
 
+    if rel_path.startswith(emk.proj_dir_placeholder):
+        rel_path = rel_path.replace(emk.proj_dir_placeholder, scope.proj_dir, 1)
     return os.path.realpath(_make_abspath(rel_path, scope))
 
 class EMK_Base(object):
@@ -330,6 +334,7 @@ class EMK_Base(object):
         self.log.setLevel(logging.INFO)
         
         self.build_dir_placeholder = "$:build:$"
+        self.proj_dir_placeholder = "$:proj:$"
         
         global _module_path
         self._emk_dir, tail = os.path.split(_module_path)
@@ -631,11 +636,16 @@ class EMK_Base(object):
         self._buildable_rules.put(rule)
 
     def _done_rule(self, rule, built):
+        now = time.time()
         with self._lock:
             for t in rule.produces:
-                exists, t.mod_time = self._get_mod_time(t.abs_path, lock=False)
+                abs_path = t.abs_path
+                exists, t.mod_time = self._get_mod_time(abs_path, lock=False)
                 if not exists:
-                    raise _BuildError("%s should have been produced by the rule" % (t.abs_path), rule.stack)
+                    raise _BuildError("%s should have been produced by the rule" % (abs_path), rule.stack)
+                if not abs_path in self._modtime_cache:
+                    self._modtime_cache[abs_path] = now
+                    rule.scope.modtime_cache[abs_path] = now
                 t._built = True
 
             for t in rule.produces:
@@ -1336,8 +1346,14 @@ class EMK(EMK_Base):
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
     
-    def resolve_build_dirs(self, *paths, ignore_errors=False):
+    def resolve_build_dirs(self, *paths, **kwargs):
+        ignore_errors = False
+        if "ignore_errors" in kwargs and kwargs["ignore_errors"]:
+            ignore_errors = True
         return self._resolve_build_dirs(paths, ignore_errors)
+    
+    def fix_stack(self, stack):
+        return _format_stack(_filter_stack(stack))
 
 def setup(argv=[]):
     emk = EMK(argv)

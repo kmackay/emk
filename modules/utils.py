@@ -1,5 +1,6 @@
 import os
 import subprocess
+import traceback
 
 class Module(object):
     def __init__(self, scope):
@@ -74,8 +75,8 @@ class Module(object):
         if strings:
             emk.log_print('\n'.join(strings))
         if exit_on_nonzero_return and proc.returncode != 0:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            raise _BuildError("Subprocess '%s' returned %s" % (' '.join(args), proc.returncode), stack)
+            stack = emk.fix_stack(traceback.extract_stack()[:-1])
+            raise emk.BuildError("Subprocess '%s' returned %s" % (' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
     def mark_updated(self, produces, requires, args):
