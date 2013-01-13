@@ -1351,7 +1351,7 @@ class EMK(EMK_Base):
                     self._modtime_cache[abs_path] = cache
                     self.scope.modtime_cache[abs_path] = cache
     
-    def mark_untouched(self, paths):
+    def mark_untouched(self, *paths):
         with self._lock:
             for path in paths:
                 abs_path = _make_target_abspath(path, self.scope)
