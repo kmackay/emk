@@ -647,17 +647,20 @@ class EMK_Base(object):
                     raise _BuildError("%s should have been produced by the rule" % (abs_path), rule.stack)
                 
                 if abs_path in self._modtime_cache:
-                    if not t._untouched:
+                    if not t._untouched and built:
                         self._modtime_cache[abs_path][1] = now
                 else:
                     if t._untouched:
                         cache = [False, 0, {}]
-                    else:
+                    elif built:
+                        cache = [False, m, {}]
+                    else
                         cache = [False, now, {}]
                     self._modtime_cache[abs_path] = cache
                     rule.scope.modtime_cache[abs_path] = cache
                 
                 t.mod_time = self._modtime_cache[abs_path][1]
+                self.log.debug("Set modtime for %s to %s", t.abs_path, t.mod_time)
                 t._built = True
 
             for t in rule.produces:
