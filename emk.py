@@ -989,7 +989,12 @@ class EMK_Base(object):
             self._handle_dir(d)
     
     def _rule(self, produces, requires, args, func, threadsafe, stack):
-        fixed_produces = set([p for p in produces if p != ""])
+        seen_produces = set()
+        fixed_produces = []
+        for p in produces:
+            if p and p not in seen_produces:
+                seen_produces.add(p)
+                fixed_produces.append(p)
         fixed_requires = [_make_require_abspath(r, self.scope) for r in requires if r != ""]
 
         new_rule = _Rule(fixed_requires, args, func, threadsafe, self.scope)
@@ -1321,8 +1326,8 @@ class EMK(EMK_Base):
     def mark_exists(self, *paths):
         with self._lock:
             for path in paths:
-                self.log.debug("Marking %s as existing", path)
                 abs_path = _make_target_abspath(path, self.scope)
+                self.log.debug("Marking %s as existing", abs_path)
                 if abs_path in self._modtime_cache:
                     self._modtime_cache[abs_path][0] = True
                 else:
