@@ -248,7 +248,9 @@ class Module(object):
                 n = os.path.basename(src)
             dest_dir = os.path.join(self._local_classpath, d)
             utils.mkdirs(dest_dir)
-            os.symlink(src, os.path.join(dest_dir, n))
+            dest = os.path.join(dest_dir, n)
+            utils.rm(dest)
+            os.symlink(src, dest)
         
         emk.mark_exists("java.__jar_resources__")
     
