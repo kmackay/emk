@@ -167,7 +167,7 @@ class Module(object):
             self.exe_ext = parent.exe_ext
             self.lib_prefix = parent.lib_prefix
             
-            self.libname = parent.libname
+            self.shared_libname = parent.shared_libname
             self.static_libname = parent.static_libname
             
             self.detect_exe = parent.detect_exe
@@ -207,7 +207,7 @@ class Module(object):
             self.exe_ext = ""
             self.lib_prefix = "lib"
             
-            self.libname = None
+            self.shared_libname = None
             self.static_libname = None
             
             self.detect_exe = "exact" # could also be "simple" or False
@@ -363,8 +363,8 @@ class Module(object):
                     emk.build(libpath)
             if self.make_shared_lib:
                 libname = "lib" + dirname + self.shared_lib_ext
-                if self.libname:
-                    libname = self.libname
+                if self.shared_libname:
+                    libname = self.shared_libname
                 libpath = os.path.join(emk.build_dir, libname)
                 emk.rule([libpath], ["link.__exe_deps__"] + list(lib_objs), self._create_shared_lib, threadsafe=self.linker.link_threadsafe())
                 emk.build(libpath)
