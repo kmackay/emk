@@ -1241,30 +1241,6 @@ class EMK(EMK_Base):
                 return wrapper
         return decorate
     
-    # decorator for "easy" rule creation
-    def args(self, *args):
-        def decorate(f):
-            if isinstance(f, _RuleWrapper):
-                f.args = args
-                return f
-            else:
-                stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
-                wrapper = _RuleWrapper(f, stack, args=args)
-                self.scope._wrapped_rules.append(wrapper)
-                return wrapper
-        return decorate
-
-    # decorator for "easy" rule creation
-    def threadsafe(self, f):
-        if isinstance(f, _RuleWrapper):
-            f.threadsafe = True
-            return f
-        else:
-            stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            wrapper = _RuleWrapper(f, stack, threadsafe=True)
-            self.scope._wrapped_rules.append(wrapper)
-            return wrapper
-    
     def depend(self, target, *dependencies):
         fixed_depends = [_make_require_abspath(d, self.scope) for d in dependencies if d != ""]
         if not fixed_depends:
