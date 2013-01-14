@@ -1068,50 +1068,51 @@ class EMK(EMK_Base):
         self.insert_module("clean", _Clean_Module(self.scope_name))
         self.pre_modules.append("clean")
         
-        self._load_config()
+        try:
+            self._load_config()
             
-        start_time = time.time()
-        self._push_scope("project", path) # need an initial "project" scope
-        self._handle_dir(path, first_dir=True)
+            start_time = time.time()
+            self._push_scope("project", path) # need an initial "project" scope
+            self._handle_dir(path, first_dir=True)
 
-        self._done_build = False
-        self._added_rule = False
-        while (self._have_unbuilt() and (self._added_rule or self._prebuild_funcs or self._postbuild_funcs)) or \
-          self._must_build or \
-          ((not self._done_build) and (self._explicit_targets or self._auto_targets or self._prebuild_funcs or self._postbuild_funcs)):
-            self._run_prebuild_funcs()
-            
-            self._remove_artificial_targets()
-            self._fix_aliases()
-            self._fix_depends()
-            
-            # fix up requires (set up absolute paths, and map to targets)
-            for rule in self._rules:
-                self._fix_requires(rule)
-            
-            self._fix_attached()
-            self._fix_auto_targets()
-            self._fix_allowed_nonexistent()
-            self._fix_requires_rule()
-
+            self._done_build = False
             self._added_rule = False
+            while (self._have_unbuilt() and (self._added_rule or self._prebuild_funcs or self._postbuild_funcs)) or \
+              self._must_build or \
+              ((not self._done_build) and (self._explicit_targets or self._auto_targets or self._prebuild_funcs or self._postbuild_funcs)):
+                self._run_prebuild_funcs()
             
-            self._do_build()
-            self._must_build = []
+                self._remove_artificial_targets()
+                self._fix_aliases()
+                self._fix_depends()
             
-            self._run_postbuild_funcs()
+                # fix up requires (set up absolute paths, and map to targets)
+                for rule in self._rules:
+                    self._fix_requires(rule)
             
-            # recurse into any new dirs
-            for scope in self._visited_dirs.values():
-                if scope.recurse_dirs:
-                    recurse_dirs = scope.recurse_dirs
-                    scope.recurse_dirs = set()
+                self._fix_attached()
+                self._fix_auto_targets()
+                self._fix_allowed_nonexistent()
+                self._fix_requires_rule()
+
+                self._added_rule = False
+            
+                self._do_build()
+                self._must_build = []
+            
+                self._run_postbuild_funcs()
+            
+                # recurse into any new dirs
+                for scope in self._visited_dirs.values():
+                    if scope.recurse_dirs:
+                        recurse_dirs = scope.recurse_dirs
+                        scope.recurse_dirs = set()
                     
-                    self._local.current_scope = scope.parent
-                    for d in recurse_dirs:
-                        self._handle_dir(d)
-        
-        self._write_modtime_caches()
+                        self._local.current_scope = scope.parent
+                        for d in recurse_dirs:
+                            self._handle_dir(d)
+        finally:
+            self._write_modtime_caches()
         
         unbuilt = set()
         for path, target in self._targets.items():
