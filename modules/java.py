@@ -1,11 +1,14 @@
 import os
 import logging
 import re
+import shutil
 
 log = logging.getLogger("emk.java")
 utils = emk.module("utils")
 
+need_depdirs = {}
 dir_cache = {}
+sysjar_cache = {}
 
 comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
 package_regex = re.compile(r'package\s+(\S+)\s*;')
@@ -14,8 +17,11 @@ main_function_regex = re.compile(r'((public\s+static)|(static\s+public))\s+void\
 class Module(object):
     def __init__(self, scope, parent=None):
         self._abs_depdirs = set()
+        self._local_classpath = None
         self._classpaths = set()
         self._sysjars = set()
+        self._output_dir = None
+        self._depended_by = set()
         
         if parent:
             self.compile_flags = list(parent.compile_flags)
@@ -27,6 +33,7 @@ class Module(object):
             self.excludes = parent.excludes.copy()
             
             self.exe_classes = parent.exe_classes.copy()
+            self.exclude_exe_classes = parent.exclude_exe_classes.copy()
             self.autodetect_exe = parent.autodetect_exe
             
             self.make_jar = parent.make_jar
@@ -38,7 +45,7 @@ class Module(object):
             self.projdirs = parent.projdirs.copy()
             self.sysjars = parent.sysjars.copy()
             
-            self.class_dir = parent.class_dir
+            self.output_dir = parent.output_dir
         else:
             self.compile_flags = []
             self.exts = set([".java"])
@@ -50,6 +57,7 @@ class Module(object):
             
             # exe_classes is a set of fully-qualified class names that contain valid main() methods.
             self.exe_classes = set()
+            self.exclude_exe_classes = set()
             self.autodetect_exe = True
             
             self.make_jar = True
@@ -61,7 +69,7 @@ class Module(object):
             self.projdirs = set()
             self.sysjars = set()
             
-            self.class_dir = None
+            self.output_dir = None
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -89,11 +97,20 @@ class Module(object):
                 main = True
             pm = package_regex.search(text)
             if pm:
-                package = pm.group(1)
+                package = pm.group(1).split('.')
         return (main, package)
     
-    def _prebuild(self):
+    def _get_needed_by(self, d, result):
         global dir_cache
+        result.add(d)
+        for sub in dir_cache[d]._depended_by:
+            if not sub in result:
+                self._get_needed_by(sub, result)
+    
+    def _prebuild(self):
+        global need_depdirs
+        global dir_cache
+        global sysjar_cache
         
         for d in self.projdirs:
             self.depdirs.add(os.path.join(emk.proj_dir, d))
@@ -121,40 +138,156 @@ class Module(object):
         for f in self.source_files:
             if not f in self.excludes:
                 sources.add(f)
+                
+        if self.autodetect_exe:
+            for source in sources:
+                m, p = self._examine_source(source)
+                if m:
+                    fname = os.path.basename(source)
+                    name, ext = os.path.splitext(fname)
+                    if p:
+                        p.append(name)
+                        fqn = '.'.join(p)
+                    else:
+                        fqn = name
+                    self.exe_classes.add(fqn)
+        self.exe_classes -= self.exclude_exe_classes
         
-        for source in sources:
-            m, p = self._examine_source(source)
-            print "%s: main = %s, package = %s" % (source, m, p)
-        
-        emk.rule(["java.__classes__"], sources, self.build_classes, threadsafe=True)
+        emk.rule(["java.__classes__"], sources, self._build_classes, threadsafe=True)
         deps = [os.path.join(d, "java.__classes__") for d in self._abs_depdirs]
         emk.depend("java.__classes__", *deps)
         
-        # if self.make_jar or there are any exes, then make a jar
-        # if jar_in_jar is True, then add all depdirs and sysjars to the jar as well (recommended for exes)
-        # make as few jars as possible
-        dir_cache[emk.current_dir] = self
-    
-    def build_classes(self, produces, requires, args):
-        global dir_cache
+        self._output_dir = os.path.join(emk.current_dir, emk.build_dir)
+        if self.output_dir:
+            self._output_dir = os.path.join(emk.current_dir, self.output_dir)
         
-        class_dir = os.path.join(emk.current_dir, emk.build_dir)
-        if self.class_dir:
-            class_dir = os.path.join(emk.current_dir, self.class_dir)
-        utils.mkdirs(class_dir)
+        expand_targets = []
+        c = 0
+        for jar in self.sysjars:
+            jarpath = emk.abspath(jar)
+            if not jarpath in sysjar_cache:
+                sysjar_cache[jarpath] = os.path.join(self._output_dir, "expanded_jars", c)
+                target = jarpath + ".__expanded__"
+                emk.rule([target], jarpath, self._expand_jar, threadsafe=False)
+                expand_targets.append(target)
+                c += 1
         
+        emk.rule(["java.__expanded_deps__"], expand_targets, utils.mark_exists, threadsafe=True)
+        deps = [os.path.join(d, "java.__expanded_deps__") for d in self._abs_depdirs]
+        emk.depend("java.__expanded_deps__", *deps)
+        
+        dirname = os.path.basename(emk.current_dir)
+        jarname = dirname + ".jar"
+        if self.jarname:
+            jarname = self.jarname
+        jarpath = os.path.join(self._output_dir, "jars", jarname)
+        if self.make_jar:
+            emk.rule([jarpath], ["java.__classes__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, args={"jar_in_jar": self.jar_in_jar})
+            emk.alias(jarpath, jarname)
+            emk.build(jarpath)
+        
+        if self.exe_classes:
+            exe_jarpath = jarpath + "_exe"
+            if self.make_jar and self.jar_in_jar == self.exe_jar_in_jar:
+                exe_jarpath = jarpath
+            else:
+                emk.rule([exe_jarpath], ["java.__classes__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, args={"jar_in_jar": self.exe_jar_in_jar})
+            for exe in self.exe_classes:
+                specific_jarname = exe + ".jar"
+                specific_jarpath = os.path.join(self._output_dir, "jars", specific_jarname)
+                emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, args={"exe_class": exe})
+                emk.alias(specific_jarpath, specific_jarname)
+                emk.build(specific_jarpath)
+        
+        class_dir = os.path.join(self._output_dir, "classes")
+        self._local_classpath = class_dir
         self._classpaths = set([class_dir])
         self._sysjars = set([emk.abspath(j) for j in self.sysjars])
         for d in self._abs_depdirs:
+            if d in dir_cache:
+                cache = dir_cache[d]
+                self._classpaths |= cache._classpaths
+                self._sysjars |= cache._sysjars
+                cache._depended_by.add(emk.current_dir)
+            elif d in need_depdirs:
+                need_depdirs[d].add(emk.current_dir)
+            else:
+                need_depdirs[d] = set([emk.current_dir])
+        
+        needed_by = set()
+        if emk.current_dir in need_depdirs:
+            for d in need_depdirs[emk.current_dir]:
+                self._depended_by.add(d)
+                self._get_needed_by(d, needed_by)
+        
+        for d in needed_by:
             cache = dir_cache[d]
-            self._classpaths |= cache._classpaths
-            self._sysjars |= cache._sysjars
+            cache._classpaths |= self._classpaths
+            cache._sysjars |= self._sysjars
         
-        classpath = ':'.join(self._classpaths | self._sysjars)
+        dir_cache[emk.current_dir] = self
+    
+    def _build_classes(self, produces, requires, args):
+        global dir_cache
         
-        cmd = ["javac", "-d", class_dir, "-sourcepath", emk.current_dir, "-classpath", classpath]
-        cmd.extend(utils.flatten_flags(self.compile_flags))
-        cmd.extend(requires)
-        utils.call(*cmd)
+        utils.mkdirs(self._local_classpath)
+        
+        if requires:
+            classpath = ':'.join(self._classpaths | self._sysjars)
+        
+            cmd = ["javac", "-d", self._local_classpath, "-sourcepath", emk.current_dir, "-classpath", classpath]
+            cmd.extend(utils.flatten_flags(self.compile_flags))
+            cmd.extend(requires)
+            utils.call(*cmd)
         
         emk.mark_exists("java.__classes__")
+
+    def _expand_jar(self, produces, requires, args):
+        jarfile = requires[0]
+        expand_dir = sysjar_cache[jarfile]
+        utils.mkdirs(expand_dir)
+        os.chdir(expand_dir)
+        utils.call("jar", "xf", jarfile)
+        shutil.rmtree("META-INF", ignore_errors=True)
+        emk.mark_exists(*produces)
+        
+    def _make_jar(self, produces, requires, args):
+        global sysjar_cache
+        
+        jar_dir = os.path.join(self._output_dir, "jars")
+        utils.mkdirs(jar_dir)
+        
+        jarfile = produces[0]
+        
+        dirs = set([self._local_classpath])
+        if args["jar_in_jar"]:
+            dirs |= self._classpaths
+            for jar in self._sysjars:
+                dirs.add(sysjar_cache[jarpath])
+        
+        cmd = ["jar", "cf", jarfile]
+        have_contents = False
+        for d in dirs:
+            entries = os.listdir(d)
+            if entries:
+                for entry in entries:
+                    cmd.extend(["-C", d, entry])
+                have_contents = True
+        
+        if have_contents:
+            utils.call(*cmd)
+            utils.call("jar", "i", jarfile)
+        else:
+            log.warning("Not making %s, since it has no contents", jarfile)
+            emk.mark_exists(jarfile)
+    
+    def _make_exe_jar(self, produces, requires, args):
+        dest = produces[0]
+        src = requires[0]
+        shutil.copy2(src, dest)
+        
+        manifest = dest + ".manifest"
+        with open(manifest, "w") as f:
+            f.write("Main-Class: " + args["exe_class"] + '\n')
+        utils.call("jar", "ufm", dest, manifest)
+        
