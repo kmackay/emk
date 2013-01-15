@@ -292,7 +292,7 @@ class Module(object):
             for jar in self._sysjars:
                 dirs.add(sysjar_cache[jarpath])
         
-        cmd = ["jar", "cvf", jarfile]
+        cmd = ["jar", "cf", jarfile]
         have_contents = False
         for d in dirs:
             entries = os.listdir(d)
@@ -302,7 +302,7 @@ class Module(object):
                 have_contents = True
         
         if have_contents:
-            utils.call(*cmd, print_stdout=True)
+            utils.call(*cmd)
             utils.call("jar", "i", jarfile)
         else:
             log.warning("Not making %s, since it has no contents", jarfile)
