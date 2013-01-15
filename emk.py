@@ -78,6 +78,7 @@ class _ScopeData(object):
         self.modtime_cache = {}
         self._do_later_funcs = []
         self._wrapped_rules = []
+        self._current_rule = None
         
         if parent:
             self.default_modules = list(parent.default_modules)
@@ -705,8 +706,10 @@ class EMK_Base(object):
                     produces = [p.abs_path for p in rule.produces]
             
                     self.scope.prepare_do_later()
+                    rule.scope._current_rule = rule
                     rule.func(produces, rule.requires, rule.args)
                     self._run_do_later_funcs()
+                    rule.scope._current_rule = None
 
                 self._done_rule(rule, need_build)
             except _BuildError as e:
@@ -1053,6 +1056,8 @@ class EMK(EMK_Base):
     pre_modules = property(lambda self: self.scope.pre_modules, _set_pre_modules)
     
     local_targets = property(lambda self: self.scope.targets)
+    
+    current_rule = property(lambda self: self.scope._current_rule)
     
     def run(self, path):
         if self._did_run:
