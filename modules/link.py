@@ -270,16 +270,16 @@ class Module(object):
                 dep_link = link_cache[abspath]
                 self._all_depdirs.update(dep_link._all_depdirs)
                 self._all_static_libs.update(dep_link._all_static_libs)
-                dep_link._depended_by.add(emk.current_dir)
+                dep_link._depended_by.add(emk.scope_dir)
             elif abspath in need_depdirs:
-                need_depdirs[abspath].add(emk.current_dir)
+                need_depdirs[abspath].add(emk.scope_dir)
             else:
-                need_depdirs[abspath] = set([emk.current_dir])
+                need_depdirs[abspath] = set([emk.scope_dir])
             emk.recurse(d)
         
         needed_by = set()
-        if emk.current_dir in need_depdirs:
-            for d in need_depdirs[emk.current_dir]:
+        if emk.scope_dir in need_depdirs:
+            for d in need_depdirs[emk.scope_dir]:
                 self._depended_by.add(d)
                 self._get_needed_by(d, needed_by)
 
@@ -298,7 +298,7 @@ class Module(object):
         else:
             emk.do_prebuild(self._create_rules)
         
-        link_cache[emk.current_dir] = self
+        link_cache[emk.scope_dir] = self
     
     def _create_interim_rule(self):
         all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()]) | self.exe_objs
@@ -341,7 +341,7 @@ class Module(object):
         emk.depend("link.__exe_deps__", *lib_deps)
         emk.depend("link.__exe_deps__", *self._all_static_libs)
         
-        dirname = os.path.basename(emk.current_dir)
+        dirname = os.path.basename(emk.scope_dir)
         making_static_lib = False
         if lib_objs:
             if self.make_static_lib:

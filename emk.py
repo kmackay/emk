@@ -195,9 +195,9 @@ class _Clean_Module(object):
         return _Clean_Module(scope, self)
     
     def clean_func(self, produces, requires, args):
-        build_dir = os.path.realpath(os.path.join(emk.current_dir, emk.build_dir))
+        build_dir = os.path.realpath(os.path.join(emk.scope_dir, emk.build_dir))
         if self.remove_build_dir:
-            if os.path.commonprefix([build_dir, emk.current_dir]) == emk.current_dir:
+            if os.path.commonprefix([build_dir, emk.scope_dir]) == emk.scope_dir:
                 _clean_log.info("Removing directory %s", build_dir)
                 shutil.rmtree(build_dir, ignore_errors=True)
         else:
@@ -1046,7 +1046,7 @@ class EMK(EMK_Base):
     
     scope_name = property(lambda self: self.scope.scope_type)
     proj_dir = property(lambda self: self.scope.proj_dir)
-    current_dir = property(lambda self: self.scope.dir)
+    scope_dir = property(lambda self: self.scope.dir)
     build_dir = property(lambda self: self.scope.build_dir, _set_build_dir)
     module_paths = property(lambda self: self.scope.module_paths, _set_module_paths)
     default_modules = property(lambda self: self.scope.default_modules, _set_default_modules)

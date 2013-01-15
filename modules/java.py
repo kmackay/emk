@@ -137,7 +137,7 @@ class Module(object):
                     log.debug("Detected generated Java files: %s", target_files)
                     self.source_files.update(target_files)
                     
-            files = [f for f in os.listdir(emk.current_dir) if os.path.isfile(f)]
+            files = [f for f in os.listdir(emk.scope_dir) if os.path.isfile(f)]
             for file_path in files:
                 if self._matches_exts(file_path, self.exts):
                     self.source_files.add(file_path)
@@ -171,9 +171,9 @@ class Module(object):
         emk.depend("java.__jar_contents__", *deps)
         emk.depend("java.__jar_contents__", "java.__jar_resources__")
         
-        self._output_dir = os.path.join(emk.current_dir, emk.build_dir)
+        self._output_dir = os.path.join(emk.scope_dir, emk.build_dir)
         if self.output_dir:
-            self._output_dir = os.path.join(emk.current_dir, self.output_dir)
+            self._output_dir = os.path.join(emk.scope_dir, self.output_dir)
         
         expand_targets = []
         c = 0
@@ -190,7 +190,7 @@ class Module(object):
         deps = [os.path.join(d, "java.__expanded_deps__") for d in self._abs_depdirs]
         emk.depend("java.__expanded_deps__", *deps)
         
-        dirname = os.path.basename(emk.current_dir)
+        dirname = os.path.basename(emk.scope_dir)
         jarname = dirname + ".jar"
         if self.jarname:
             jarname = self.jarname
@@ -222,15 +222,15 @@ class Module(object):
                 cache = dir_cache[d]
                 self._classpaths |= cache._classpaths
                 self._sysjars |= cache._sysjars
-                cache._depended_by.add(emk.current_dir)
+                cache._depended_by.add(emk.scope_dir)
             elif d in need_depdirs:
-                need_depdirs[d].add(emk.current_dir)
+                need_depdirs[d].add(emk.scope_dir)
             else:
-                need_depdirs[d] = set([emk.current_dir])
+                need_depdirs[d] = set([emk.scope_dir])
         
         needed_by = set()
-        if emk.current_dir in need_depdirs:
-            for d in need_depdirs[emk.current_dir]:
+        if emk.scope_dir in need_depdirs:
+            for d in need_depdirs[emk.scope_dir]:
                 self._depended_by.add(d)
                 self._get_needed_by(d, needed_by)
         
@@ -239,7 +239,7 @@ class Module(object):
             cache._classpaths |= self._classpaths
             cache._sysjars |= self._sysjars
         
-        dir_cache[emk.current_dir] = self
+        dir_cache[emk.scope_dir] = self
     
     def _copy_resources(self, produces, requires, args):
         for dest, src in zip(args["dests"], requires):
@@ -262,7 +262,7 @@ class Module(object):
         if requires:
             classpath = ':'.join(self._classpaths | self._sysjars)
         
-            cmd = ["javac", "-d", self._local_classpath, "-sourcepath", emk.current_dir, "-classpath", classpath]
+            cmd = ["javac", "-d", self._local_classpath, "-sourcepath", emk.scope_dir, "-classpath", classpath]
             cmd.extend(utils.flatten_flags(self.compile_flags))
             cmd.extend(requires)
             utils.call(*cmd)
