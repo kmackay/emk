@@ -76,8 +76,11 @@ class Module(object):
         if strings:
             emk.log_print('\n'.join(strings))
         if exit_on_nonzero_return and proc.returncode != 0:
-            stack = emk.fix_stack(traceback.extract_stack()[:-1])
-            raise emk.BuildError("Subprocess '%s' returned %s" % (' '.join(args), proc.returncode), stack)
+            stack = [emk.BLUE_CODE + line + emk.RESET_CODE for line in emk.fix_stack(traceback.extract_stack()[:-1])]
+            if emk.options["log"] == "debug" and emk.current_rule:
+                stack.append("Rule definition:")
+                stack.extend(["    " + line for line in emk.current_rule.stack])
+            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
     def mark_exists(self, produces, requires, args):

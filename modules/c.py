@@ -194,13 +194,18 @@ class Module(object):
         else:
             requires.append(emk.ALWAYS_BUILD)
         
-        emk.rule([dest], requires, self.do_compile, args=args, threadsafe=True)
+        emk.rule([dest], requires, self.do_compile, args=args, threadsafe=True, ex_safe=True)
     
     def do_compile(self, produces, requires, args):
         if not self.compiler:
             raise emk.BuildError("No compiler defined!")
-        if args["c++"]:
-            self.compiler.compile_cxx(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
-        else:
-            self.compiler.compile_c(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
+        try:
+            if args["c++"]:
+                self.compiler.compile_cxx(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
+            else:
+                self.compiler.compile_c(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
+        except:
+            utils.rm(produces[0])
+            utils.rm(produces[0] + ".dep")
+            raise
         

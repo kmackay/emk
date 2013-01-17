@@ -162,11 +162,11 @@ class Module(object):
         
         if self.resources:
             resource_sources, resource_dests = zip(*self.resources)
-            emk.rule(["java.__jar_resources__"], resource_sources, self._copy_resources, threadsafe=True, args={"dests": resource_dests})
+            emk.rule(["java.__jar_resources__"], resource_sources, self._copy_resources, threadsafe=True, ex_safe=True, args={"dests": resource_dests})
         else:
-            emk.rule(["java.__jar_resources__"], [], utils.mark_exists, threadsafe=True)
+            emk.rule(["java.__jar_resources__"], [], utils.mark_exists, threadsafe=True, ex_safe=True)
         
-        emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True)
+        emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True, ex_safe=True)
         deps = [os.path.join(d, "java.__jar_contents__") for d in self._abs_depdirs]
         emk.depend("java.__jar_contents__", *deps)
         emk.depend("java.__jar_contents__", "java.__jar_resources__")
@@ -182,11 +182,11 @@ class Module(object):
             if not jarpath in sysjar_cache:
                 sysjar_cache[jarpath] = os.path.join(self._output_dir, "expanded_jars", c)
                 target = jarpath + ".__expanded__"
-                emk.rule([target], jarpath, self._expand_jar, threadsafe=False)
+                emk.rule([target], jarpath, self._expand_jar, threadsafe=False, ex_safe=True)
                 expand_targets.append(target)
                 c += 1
         
-        emk.rule(["java.__expanded_deps__"], expand_targets, utils.mark_exists, threadsafe=True)
+        emk.rule(["java.__expanded_deps__"], expand_targets, utils.mark_exists, threadsafe=True, ex_safe=True)
         deps = [os.path.join(d, "java.__expanded_deps__") for d in self._abs_depdirs]
         emk.depend("java.__expanded_deps__", *deps)
         
@@ -196,7 +196,7 @@ class Module(object):
             jarname = self.jarname
         jarpath = os.path.join(self._output_dir, "jars", jarname)
         if self.make_jar:
-            emk.rule([jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, args={"jar_in_jar": self.jar_in_jar})
+            emk.rule([jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, ex_safe=True, args={"jar_in_jar": self.jar_in_jar})
             emk.alias(jarpath, jarname)
             emk.build(jarpath)
         
@@ -205,11 +205,12 @@ class Module(object):
             if self.make_jar and self.jar_in_jar == self.exe_jar_in_jar:
                 exe_jarpath = jarpath
             else:
-                emk.rule([exe_jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, args={"jar_in_jar": self.exe_jar_in_jar})
+                emk.rule([exe_jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, \
+                    threadsafe=True, ex_safe=True, args={"jar_in_jar": self.exe_jar_in_jar})
             for exe in self.exe_classes:
                 specific_jarname = exe + ".jar"
                 specific_jarpath = os.path.join(self._output_dir, "jars", specific_jarname)
-                emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, args={"exe_class": exe})
+                emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, ex_safe=True, args={"exe_class": exe})
                 emk.alias(specific_jarpath, specific_jarname)
                 emk.build(specific_jarpath)
         
@@ -257,25 +258,33 @@ class Module(object):
     def _build_classes(self, produces, requires, args):
         global dir_cache
         
-        utils.mkdirs(self._local_classpath)
+        try:
+            utils.mkdirs(self._local_classpath)
         
-        if requires:
-            classpath = ':'.join(self._classpaths | self._sysjars)
+            if requires:
+                classpath = ':'.join(self._classpaths | self._sysjars)
         
-            cmd = ["javac", "-d", self._local_classpath, "-sourcepath", emk.scope_dir, "-classpath", classpath]
-            cmd.extend(utils.flatten_flags(self.compile_flags))
-            cmd.extend(requires)
-            utils.call(*cmd)
+                cmd = ["javac", "-d", self._local_classpath, "-sourcepath", emk.scope_dir, "-classpath", classpath]
+                cmd.extend(utils.flatten_flags(self.compile_flags))
+                cmd.extend(requires)
+                utils.call(*cmd)
+        except:
+            shutil.rmtree(self._local_classpath, ignore_errors=True)
+            raise
         
         emk.mark_exists("java.__jar_contents__")
 
     def _expand_jar(self, produces, requires, args):
         jarfile = requires[0]
         expand_dir = sysjar_cache[jarfile]
-        utils.mkdirs(expand_dir)
-        os.chdir(expand_dir)
-        utils.call("jar", "xf", jarfile)
-        shutil.rmtree("META-INF", ignore_errors=True)
+        try:
+            utils.mkdirs(expand_dir)
+            os.chdir(expand_dir)
+            utils.call("jar", "xf", jarfile)
+            shutil.rmtree("META-INF", ignore_errors=True)
+        except:
+            shutil.rmtree(expand_dir, ignore_errors=True)
+            raise
         emk.mark_exists(*produces)
         
     def _make_jar(self, produces, requires, args):
@@ -302,8 +311,12 @@ class Module(object):
                 have_contents = True
         
         if have_contents:
-            utils.call(*cmd)
-            utils.call("jar", "i", jarfile)
+            try:
+                utils.call(*cmd)
+                utils.call("jar", "i", jarfile)
+            except:
+                utils.rm(jarfile)
+                raise
         else:
             log.warning("Not making %s, since it has no contents", jarfile)
             emk.mark_exists(jarfile)
@@ -311,10 +324,15 @@ class Module(object):
     def _make_exe_jar(self, produces, requires, args):
         dest = produces[0]
         src = requires[0]
-        shutil.copy2(src, dest)
+        try:
+            shutil.copy2(src, dest)
         
-        manifest = dest + ".manifest"
-        with open(manifest, "w") as f:
-            f.write("Main-Class: " + args["exe_class"] + '\n')
-        utils.call("jar", "ufm", dest, manifest)
+            manifest = dest + ".manifest"
+            with open(manifest, "w") as f:
+                f.write("Main-Class: " + args["exe_class"] + '\n')
+        
+            utils.call("jar", "ufm", dest, manifest)
+        except:
+            utils.rm(dest)
+            raise
         

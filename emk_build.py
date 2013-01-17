@@ -40,13 +40,14 @@ class _Target(object):
         self._untouched = False
 
 class _Rule(object):
-    def __init__(self, requires, args, func, threadsafe, scope):
+    def __init__(self, requires, args, func, threadsafe, ex_safe, scope):
         self.produces = []
         self.requires = requires
         self.args = args
         self.func = func
         self.scope = scope
         self.threadsafe = threadsafe
+        self.ex_safe = ex_safe
         
         self.secondary_deps = set()
         
@@ -57,13 +58,14 @@ class _Rule(object):
         self.stack = []
 
 class _RuleWrapper(object):
-    def __init__(self, func, stack=[], produces=[], requires=[], args=[], threadsafe=False):
+    def __init__(self, func, stack=[], produces=[], requires=[], args=[], threadsafe=False, ex_safe=False):
         self.func = func
         self.stack = stack
         self.produces = produces
         self.requires = requires
         self.args = args
         self.threadsafe = threadsafe
+        self.ex_safe = ex_safe
 
     def __call__(self, produces, requires, args):
         return self.func(produces, requires, args)
@@ -78,7 +80,6 @@ class _ScopeData(object):
         self.modtime_cache = {}
         self._do_later_funcs = []
         self._wrapped_rules = []
-        self._current_rule = None
         
         if parent:
             self.default_modules = list(parent.default_modules)
@@ -206,7 +207,7 @@ class _Clean_Module(object):
         emk.mark_exists(*produces)
     
     def post_rules(self):
-        emk.rule(["clean"], [emk.ALWAYS_BUILD], self.clean_func, threadsafe=True)
+        emk.rule(["clean"], [emk.ALWAYS_BUILD], self.clean_func, threadsafe=True, ex_safe=True)
 
 class _Module_Instance(object):
     def __init__(self, name, instance, mod):
@@ -295,10 +296,10 @@ def _filter_stack(stack):
         if left_emk:
             new_stack.append(item)
         elif entered_emk:
-            if item[0] != __file__:
+            if not __file__.startswith(item[0]):
                 left_emk = True
                 new_stack.append(item)
-        elif item[0] == __file__:
+        elif __file__.startswith(item[0]):
             entered_emk = True
     
     if not entered_emk:
@@ -344,7 +345,6 @@ class EMK_Base(object):
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
         self.log.propagate = False
-        self.log.setLevel(logging.INFO)
         
         self.build_dir_placeholder = "$:build:$"
         self.proj_dir_placeholder = "$:proj:$"
@@ -353,12 +353,14 @@ class EMK_Base(object):
         self._emk_dir, tail = os.path.split(_module_path)
         
         self._local = threading.local()
+        self._local.current_rule = None
         
         self._prebuild_funcs = [] # list of (scope, func)
         self._postbuild_funcs = [] # list of (scope, func)
         
         self._targets = {} # map absolute target name -> target
         self._rules = []
+        self._bad_rule = None
         
         self._visited_dirs = {}
         self._current_proj_dir = None
@@ -392,13 +394,21 @@ class EMK_Base(object):
         self._toplevel_examined_targets = set()
         
         self._lock = threading.Lock()
-        self._build_threads = 1
         
         # parse args
         log_levels = {"debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
         
-        self.use_colors = True
         self._options = {}
+        
+        self.log.setLevel(logging.INFO)
+        self._options["log"] = "info"
+        
+        self._build_threads = multiprocessing.cpu_count()
+        self._options["threads"] = "x"
+        
+        self.use_colors = True
+        self._options["colors"] = "yes"
+        
         self._explicit_targets = set()
         for arg in args:
             if '=' in arg:
@@ -424,7 +434,6 @@ class EMK_Base(object):
                                 self.log.error("Thread count '%s' cannot be converted to an integer", val)
                                 val = 1
                         self._build_threads = val
-                        self.log.info("Using %d threads", val)
                     elif key == "colors":
                         if val != "yes":
                             val = "no"
@@ -433,6 +442,8 @@ class EMK_Base(object):
                     self._options[key] = val
             else:
                 self._explicit_targets.add(arg)
+        
+        self.log.info("Using %d %s", self._build_threads, ("thread" if self._build_threads == 1 else "threads"))
                     
         self.RESET_CODE = ""
         self.BOLD_CODE = ""
@@ -706,7 +717,13 @@ class EMK_Base(object):
                     if r._remaining_unbuilt_reqs == 0:
                         self._add_buildable_rule(r)
     
+    def _set_bad_rule(self, rule):
+        if not rule.ex_safe:
+            with self._lock:
+                self._bad_rule = rule
+    
     def _build_thread_func(self, special):
+        self._local.current_rule = None
         while(True):
             rule = self._buildable_rules.get(special)
             if rule is self._buildable_rules.STOP:
@@ -739,21 +756,26 @@ class EMK_Base(object):
                     produces = [p.abs_path for p in rule.produces]
             
                     self.scope.prepare_do_later()
-                    rule.scope._current_rule = rule
+                    self._local.current_rule = rule
                     rule.func(produces, rule.requires, rule.args)
                     self._run_do_later_funcs()
-                    rule.scope._current_rule = None
+                    self._local.current_rule = None
 
                 self._done_rule(rule, need_build)
             except _BuildError as e:
+                self._set_bad_rule(rule)
                 self._buildable_rules.error(e)
                 return
             except Exception as e:
+                self._set_bad_rule(rule)
                 lines = ["    %s" % (line) for line in _get_exception_info()]
                 lines.append("Rule definition:")
                 lines.extend(["    %s" % (line) for line in rule.stack])
                 self._buildable_rules.error(_BuildError("Error running rule", lines))
                 return
+            except:
+                self._set_bad_rule(rule)
+                raise
             
             self._buildable_rules.done_task()
 
@@ -845,7 +867,7 @@ class EMK_Base(object):
             raise _BuildError("Error running do_later function (in %s)" % (self.scope.dir), _get_exception_info())
         
         for wrapper in self.scope._wrapped_rules:
-            self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.stack)
+            self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.ex_safe, wrapper.stack)
     
     def _have_unbuilt(self):
         for target in self._toplevel_examined_targets:
@@ -1028,7 +1050,7 @@ class EMK_Base(object):
         for d in recurse_dirs:
             self._handle_dir(d)
     
-    def _rule(self, produces, requires, args, func, threadsafe, stack):
+    def _rule(self, produces, requires, args, func, threadsafe, ex_safe, stack):
         seen_produces = set()
         fixed_produces = []
         for p in produces:
@@ -1037,7 +1059,7 @@ class EMK_Base(object):
                 fixed_produces.append(p)
         fixed_requires = [_make_require_abspath(r, self.scope) for r in requires if r != ""]
 
-        new_rule = _Rule(fixed_requires, args, func, threadsafe, self.scope)
+        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, self.scope)
         new_rule.stack = stack
         with self._lock:
             self._rules.append(new_rule)
@@ -1055,6 +1077,14 @@ class EMK_Base(object):
                     self.scope.targets[new_target.orig_path] = new_target
                     new_rule.produces.append(new_target)
                     self._added_rule = True
+    
+    def _print_bad_rule(self):
+        if self._bad_rule:
+            print(emk.UNDERLINE_CODE + "A rule may have been partially executed." + emk.RESET_CODE)
+            print("Rule definition:")
+            for line in self._bad_rule.stack:
+                print("    %s" % (line))
+            print(emk.BOLD_CODE + emk.RED_CODE + "You should clean before rebuilding." + emk.RESET_CODE)
 
 class EMK(EMK_Base):
     def __init__(self, args):
@@ -1094,7 +1124,7 @@ class EMK(EMK_Base):
     
     local_targets = property(lambda self: self.scope.targets)
     
-    current_rule = property(lambda self: self.scope._current_rule)
+    current_rule = property(lambda self: self._local.current_rule)
     
     def run(self, path):
         if self._did_run:
@@ -1259,9 +1289,9 @@ class EMK(EMK_Base):
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
-    def rule(self, produces, requires, func, args=[], threadsafe=False):
+    def rule(self, produces, requires, func, args=[], threadsafe=False, ex_safe=False):
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-        self._rule(produces, requires, args, func, threadsafe, stack)
+        self._rule(produces, requires, args, func, threadsafe, ex_safe, stack)
     
     # decorator for "easy" rule creation
     def produces(self, *targets):
@@ -1423,11 +1453,14 @@ def main(args):
         setup(args).run(os.getcwd())
         return 0
     except KeyboardInterrupt:
-        print("\nemk: Interrupted; you should probably clean before rebuilding.")
+        print("\nemk: Interrupted")
+        emk._print_bad_rule()
         return 1
     except _BuildError as e:
         print(emk.BOLD_CODE + emk.RED_CODE + "Build error:" + emk.RESET_CODE + " %s" % (e), file=sys.stderr)
         if e.extra_info:
             for line in e.extra_info:
-                print("    %s" % (line), file=sys.stderr)
+                s = line.replace('\n', "\n    ")
+                print("    %s" % (s), file=sys.stderr)
+        emk._print_bad_rule()
         return 1
