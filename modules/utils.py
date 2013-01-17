@@ -68,11 +68,11 @@ class Module(object):
         if print_call:
             strings.append(' '.join(args))
         if print_stdout and proc_stdout:
-            strings.append("emk: Subprocess stdout:")
+            strings.append(emk.UNDERLINE_CODE + "Subprocess stdout:" + emk.RESET_CODE)
             strings.append(proc_stdout)
         if (print_stderr == True or (print_stderr == "nonzero" and proc.returncode != 0)) and proc_stderr:
-            strings.append("emk: Subprocess stderr:")
-            strings.append(proc_stderr)
+            strings.append(emk.UNDERLINE_CODE + "Subprocess stderr:" + emk.RESET_CODE)
+            strings.append(emk.RED_CODE + proc_stderr + emk.RESET_CODE)
         if strings:
             emk.log_print('\n'.join(strings))
         if exit_on_nonzero_return and proc.returncode != 0:

@@ -231,9 +231,20 @@ class _Formatter(logging.Formatter):
 
     def format(self, record):
         record.message = record.getMessage()
+        record.levelname = record.levelname.lower()
+        if record.levelname == "warning":
+            record.levelname = emk.BOLD_CODE + record.levelname + emk.RESET_CODE
+        elif record.levelname == "error":
+            record.levelname = emk.BOLD_CODE + emk.RED_CODE + record.levelname + emk.RESET_CODE
+        
+        if record.levelname == "debug":
+            record.message = emk.BLUE_CODE + record.message + emk.RESET_CODE
+        elif record.levelname == "error":
+            record.message = emk.RED_CODE + record.message + emk.RESET_CODE
+            
         if "adorn" in record.__dict__ and not record.__dict__["adorn"]:
             return record.message
-        record.levelname = record.levelname.lower()
+        
         return self.format_str % record.__dict__
 
 def _find_project_dir():
@@ -386,6 +397,7 @@ class EMK_Base(object):
         # parse args
         log_levels = {"debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
         
+        self.use_colors = True
         self._options = {}
         self._explicit_targets = set()
         for arg in args:
@@ -413,9 +425,30 @@ class EMK_Base(object):
                                 val = 1
                         self._build_threads = val
                         self.log.info("Using %d threads", val)
+                    elif key == "colors":
+                        if val != "yes":
+                            val = "no"
+                            self.use_colors = False
+                            
                     self._options[key] = val
             else:
                 self._explicit_targets.add(arg)
+                    
+        self.RESET_CODE = ""
+        self.BOLD_CODE = ""
+        self.UNDERLINE_CODE = ""
+        self.RED_CODE = ""
+        self.GREEN_CODE = ""
+        self.YELLOW_CODE = ""
+        self.BLUE_CODE = ""
+        if self.use_colors and sys.platform != "win32":
+            self.RESET_CODE = "\033[0m"
+            self.BOLD_CODE = "\033[1m"
+            self.UNDERLINE_CODE = "\033[4m"
+            self.RED_CODE = "\033[31m"
+            self.GREEN_CODE = "\033[32m"
+            self.YELLOW_CODE = "\033[33m"
+            self.BLUE_CODE = "\033[34m"
         
         if "clean" in self._explicit_targets:
             self._cleaning = True
@@ -1393,7 +1426,7 @@ def main(args):
         print("\nemk: Interrupted; you should probably clean before rebuilding.")
         return 1
     except _BuildError as e:
-        print("Build error: %s" % (e), file=sys.stderr)
+        print(emk.BOLD_CODE + emk.RED_CODE + "Build error:" + emk.RESET_CODE + " %s" % (e), file=sys.stderr)
         if e.extra_info:
             for line in e.extra_info:
                 print("    %s" % (line), file=sys.stderr)
