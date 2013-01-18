@@ -19,7 +19,7 @@ import threading
 import shutil
 import multiprocessing
 
-_module_path = os.path.realpath(os.path.abspath(__file__))
+_module_path = os.path.realpath(__file__)
 
 class _Target(object):
     def __init__(self, local_path, rule):
@@ -484,7 +484,7 @@ class EMK_Base(object):
         fp = None
         try:
             fp, pathname, description = imp.find_module(name, fixed_paths)
-            mpath = os.path.realpath(os.path.abspath(pathname))
+            mpath = os.path.realpath(pathname)
             d, tail = os.path.split(mpath)
             os.chdir(d)
             if set_scope_dir:
@@ -1004,8 +1004,8 @@ class EMK_Base(object):
                 except IOError:
                     self.log.error("Failed to open cache file %s", cache_path)
     
-    def _handle_dir(self, dir, first_dir=False):
-        path = os.path.realpath(os.path.abspath(dir))
+    def _handle_dir(self, d, first_dir=False):
+        path = os.path.realpath(d)
         if path in self._visited_dirs:
             return
         
@@ -1132,7 +1132,7 @@ class EMK(EMK_Base):
             raise _BuildError("Cannot call run() again", stack)
         self._did_run = True
         
-        root_scope = _ScopeData(None, "global", os.path.realpath(os.path.abspath(path)), _find_project_dir())
+        root_scope = _ScopeData(None, "global", os.path.realpath(path), _find_project_dir())
         root_scope.module_paths.append(os.path.join(self._emk_dir, "modules"))
         self._local.current_scope = root_scope
         
@@ -1257,7 +1257,7 @@ class EMK(EMK_Base):
             fixed_module_paths = [_make_target_abspath(path, self.scope) for path in self.scope.module_paths]
             self.log.debug("Trying to load module %s from %s", name, fixed_module_paths)
             fp, pathname, description = imp.find_module(name, fixed_module_paths)
-            mpath = os.path.realpath(os.path.abspath(pathname))
+            mpath = os.path.realpath(pathname)
             if not mpath in self._all_loaded_modules:
                 d, tail = os.path.split(mpath)
                 os.chdir(d)

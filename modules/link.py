@@ -49,7 +49,7 @@ class _GccLinker(object):
                 name, ext = os.path.splitext(file_path)
                 new_name = "%s_%s%s" % (name, counter, ext)
                 os.rename(file_path, new_name)
-                objs.append(os.path.realpath(os.path.abspath(new_name)))
+                objs.append(os.path.realpath(new_name))
             os.chdir(dump_dir)
             counter += 1
         os.chdir(orig_dir)
