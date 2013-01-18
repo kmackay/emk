@@ -83,5 +83,8 @@ class Module(object):
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
+    def mark_exists_rule(self, produces, requires):
+        emk.rule(produces, requires, self.mark_exists, threadsafe=True, ex_safe=True)
+        
     def mark_exists(self, produces, requires, args):
         emk.mark_exists(*produces)

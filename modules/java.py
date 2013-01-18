@@ -164,7 +164,7 @@ class Module(object):
             resource_sources, resource_dests = zip(*self.resources)
             emk.rule(["java.__jar_resources__"], resource_sources, self._copy_resources, threadsafe=True, ex_safe=True, args={"dests": resource_dests})
         else:
-            emk.rule(["java.__jar_resources__"], [], utils.mark_exists, threadsafe=True, ex_safe=True)
+            utils.mark_exists_rule(["java.__jar_resources__"], [])
         
         emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True, ex_safe=True)
         deps = [os.path.join(d, "java.__jar_contents__") for d in self._abs_depdirs]
@@ -186,7 +186,7 @@ class Module(object):
                 expand_targets.append(target)
                 c += 1
         
-        emk.rule(["java.__expanded_deps__"], expand_targets, utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["java.__expanded_deps__"], expand_targets)
         deps = [os.path.join(d, "java.__expanded_deps__") for d in self._abs_depdirs]
         emk.depend("java.__expanded_deps__", *deps)
         

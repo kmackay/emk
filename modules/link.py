@@ -303,7 +303,7 @@ class Module(object):
     
     def _create_interim_rule(self):
         all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()]) | self.exe_objs
-        emk.rule(["link.__interim__"], all_objs, utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["link.__interim__"], all_objs)
         emk.build("link.__interim__")
         
     def _simple_detect_exe(self, sourcefile):
@@ -336,7 +336,7 @@ class Module(object):
         
         lib_objs = all_objs - exe_objs
         
-        emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["link.__exe_deps__"], ["link.__static_lib__"])
         
         lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         emk.depend("link.__exe_deps__", *lib_deps)
@@ -372,7 +372,7 @@ class Module(object):
                 emk.build(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
-            emk.rule(["link.__static_lib__"], [], utils.mark_exists, threadsafe=True, ex_safe=True)
+            utils.mark_exists_rule(["link.__static_lib__"], [])
         
         exe_targets = []
         exe_names = set()
@@ -392,7 +392,7 @@ class Module(object):
             emk.alias(path, name)
             exe_targets.append(path)
             
-        emk.rule(["link.__exes__"], exe_targets, utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["link.__exes__"], exe_targets)
         emk.build("link.__exes__")
     
     def _create_static_lib(self, produces, requires, args):
