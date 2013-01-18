@@ -474,7 +474,7 @@ class EMK_Base(object):
     def _pop_scope(self):
         self._local.current_scope = self._local.current_scope.parent
     
-    def _import_from(self, paths, name, set_scope_dir=False):
+    def import_from(self, paths, name, set_scope_dir=False):
         if self.building:
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call import_from() when building", stack)
@@ -930,7 +930,7 @@ class EMK_Base(object):
         if env_paths:
             search_paths = env_paths.split(':')
         
-        self._import_from(search_paths, "emk_global", set_scope_dir=True)
+        self.import_from(search_paths, "emk_global", set_scope_dir=True)
         self._run_module_post_functions()
         self._run_do_later_funcs()
     
@@ -1207,9 +1207,6 @@ class EMK(EMK_Base):
         
         diff = time.time() - start_time
         self.log.info("Finished in %0.3f seconds" % (diff))
-    
-    def import_from(self, paths, name):
-        return self._import_from(paths, name)
     
     def insert_module(self, name, instance):
         if self.building:
