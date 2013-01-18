@@ -61,47 +61,47 @@ class Module(object):
         if parent:
             self.compiler = parent.compiler
             
-            self.include_dirs = parent.include_dirs.copy()
+            self.include_dirs = list(parent.include_dirs)
             self.defines = parent.defines.copy()
             self.flags = list(parent.flags)
 
-            self.c.include_dirs = parent.c.include_dirs.copy()
+            self.c.include_dirs = list(parent.c.include_dirs)
             self.c.defines = parent.c.defines.copy()
             self.c.flags = list(parent.c.flags)
-            self.c.exts = parent.c.exts.copy()
-            self.c.source_files = parent.c.source_files.copy()
+            self.c.exts = list(parent.c.exts)
+            self.c.source_files = list(parent.c.source_files)
             
-            self.cxx.include_dirs = parent.cxx.include_dirs.copy()
+            self.cxx.include_dirs = list(parent.cxx.include_dirs)
             self.cxx.defines = parent.cxx.defines.copy()
             self.cxx.flags = list(parent.cxx.flags)
-            self.cxx.exts = parent.cxx.exts.copy()
-            self.cxx.source_files = parent.cxx.source_files.copy()
+            self.cxx.exts = list(parent.cxx.exts)
+            self.cxx.source_files = list(parent.cxx.source_files)
             
             self.autodetect = parent.autodetect
             self.autodetect_from_targets = parent.autodetect_from_targets
-            self.excludes = parent.excludes.copy()
+            self.excludes = list(parent.excludes)
         else:
             self.compiler = _GccCompiler()
             
-            self.include_dirs = set()
+            self.include_dirs = []
             self.defines = {}
             self.flags = []
             
-            self.c.include_dirs = set()
+            self.c.include_dirs = []
             self.c.defines = {}
             self.c.flags = []
-            self.c.exts = set([".c"])
-            self.c.source_files = set()
+            self.c.exts = [".c"]
+            self.c.source_files = []
             
-            self.cxx.include_dirs = set()
+            self.cxx.include_dirs = []
             self.cxx.defines = {}
             self.cxx.flags = []
-            self.cxx.exts = set([".cpp", ".cxx", ".c++", ".cc"])
-            self.cxx.source_files = set()
+            self.cxx.exts = [".cpp", ".cxx", ".c++", ".cc"]
+            self.cxx.source_files = []
         
             self.autodetect = True
             self.autodetect_from_targets = True
-            self.excludes = set()
+            self.excludes = []
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -127,19 +127,19 @@ class Module(object):
                 target_c_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts)]
                 if target_c_files:
                     log.debug("Detected generated C files: %s", target_c_files)
-                    self.c.source_files.update(target_c_files)
+                    self.c.source_files.extend(target_c_files)
                     
                 target_cxx_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.cxx.exts)]
                 if target_cxx_files:
                     log.debug("Detected generated C++ files: %s", target_cxx_files)
-                    self.cxx.source_files.update(target_cxx_files)
+                    self.cxx.source_files.extend(target_cxx_files)
                     
             files = [f for f in os.listdir(emk.scope_dir) if os.path.isfile(f)]
             for file_path in files:
                 if self._matches_exts(file_path, self.c.exts):
-                    self.c.source_files.add(file_path)
+                    self.c.source_files.append(file_path)
                 if self._matches_exts(file_path, self.cxx.exts):
-                    self.cxx.source_files.add(file_path)
+                    self.cxx.source_files.append(file_path)
         
         for f in self.c.source_files:
             if f in self.excludes:
@@ -150,13 +150,13 @@ class Module(object):
                 continue
             cxx_sources.add(f)
         
-        c_includes = self.include_dirs | self.c.include_dirs
+        c_includes = utils.unique_list(self.include_dirs + self.c.include_dirs)
         c_flags = utils.unique_list(self.flags + self.c.flags)
         c_defines = dict(self.defines)
         c_defines.update(self.c.defines)
         c_args = {"c++":False, "includes":c_includes, "defines":c_defines, "flags":c_flags}
         
-        cxx_includes = self.include_dirs | self.cxx.include_dirs
+        cxx_includes = utils.unique_list(self.include_dirs + self.cxx.include_dirs)
         cxx_flags = utils.unique_list(self.flags + self.cxx.flags)
         cxx_defines = dict(self.defines)
         cxx_defines.update(self.cxx.defines)
