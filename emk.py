@@ -17,9 +17,6 @@ import threading
 import shutil
 import multiprocessing
 
-from appdirs import AppDirs
-
-_app_dirs = AppDirs("emk", "EMK")
 _module_path = os.path.realpath(__file__)
 
 class _Target(object):
@@ -925,7 +922,7 @@ class EMK_Base(object):
     def _load_config(self):
         # load global config
         self.scope.prepare_do_later()
-        search_paths = [os.path.join(_app_dirs.user_data_dir, "config"), os.path.join(self._emk_dir, "config")]
+        search_paths = [os.path.join(self._emk_dir, "config")]
         env_paths = os.environ.get('EMK_CONFIG_DIRS')
         if env_paths:
             search_paths = env_paths.split(':')
