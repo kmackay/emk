@@ -159,6 +159,7 @@ class Module(object):
         self._depended_by = set()
         self._all_static_libs = set()
         self._static_libpath = None
+        self._syslib_paths = set()
         
         if parent:
             self.linker = parent.linker
@@ -178,25 +179,25 @@ class Module(object):
             self.strip = parent.strip
             self.lib_in_lib = parent.lib_in_lib
             
-            self.exe_objs = parent.exe_objs.copy()
-            self.non_exe_objs = parent.non_exe_objs
+            self.exe_objs = list(parent.exe_objs)
+            self.non_exe_objs = list(parent.non_exe_objs)
             self.objects = parent.objects.copy()
-            self.obj_nosrc = parent.obj_nosrc.copy()
+            self.obj_nosrc = list(parent.obj_nosrc)
             
-            self.flags = parent.flags.copy()
+            self.flags = list(parent.flags)
             self.local_flags = list(parent.local_flags)
-            self.libflags = parent.libflags.copy()
+            self.libflags = list(parent.libflags)
             self.local_libflags = list(parent.local_libflags)
-            self.exeflags = parent.exeflags.copy()
+            self.exeflags = list(parent.exeflags)
             self.local_exeflags = list(parent.local_exeflags)
             
-            self.static_libs = parent.static_libs.copy()
-            self.local_static_libs = parent.local_static_libs.copy()
+            self.static_libs = list(parent.static_libs)
+            self.local_static_libs = list(parent.local_static_libs)
             
-            self.depdirs = parent.depdirs.copy()
-            self.projdirs = parent.projdirs.copy()
-            self.syslibs = parent.syslibs.copy()
-            self.syslib_paths = parent.syslib_paths.copy()
+            self.depdirs = list(parent.depdirs)
+            self.projdirs = list(parent.projdirs)
+            self.syslibs = list(parent.syslibs)
+            self.syslib_paths = list(parent.syslib_paths)
         else:
             if sys.platform == "darwin":
                 self.linker = _OsxGccLinker()
@@ -218,25 +219,25 @@ class Module(object):
             self.strip = False
             self.lib_in_lib = False
             
-            self.exe_objs = set()
-            self.non_exe_objs = set()
+            self.exe_objs = []
+            self.non_exe_objs = []
             self.objects = {}
-            self.obj_nosrc = set()
+            self.obj_nosrc = []
             
-            self.flags = set()
+            self.flags = []
             self.local_flags = []
-            self.libflags = set()
+            self.libflags = []
             self.local_libflags = []
-            self.exeflags = set()
+            self.exeflags = []
             self.local_exeflags = []
             
-            self.static_libs = set()
-            self.local_static_libs = set()
+            self.static_libs = []
+            self.local_static_libs = []
             
-            self.depdirs = set()
-            self.projdirs = set()
-            self.syslibs = set()
-            self.syslib_paths = set()
+            self.depdirs = []
+            self.projdirs = []
+            self.syslibs = []
+            self.syslib_paths = []
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -256,15 +257,15 @@ class Module(object):
         global link_cache
         global need_depdirs
         
-        self.syslib_paths = set([emk.abspath(d) for d in self.syslib_paths])
+        self._syslib_paths = set([emk.abspath(d) for d in self.syslib_paths])
         
         for d in self.projdirs:
-            self.depdirs.add(os.path.join(emk.proj_dir, d))
-        self.projdirs.clear()
+            self.depdirs.append(os.path.join(emk.proj_dir, d))
+        self.projdirs = []
 
         self._all_static_libs.update(self.static_libs)
         
-        for d in self.depdirs:
+        for d in set(self.depdirs):
             abspath = emk.abspath(d)
             self._all_depdirs.add(abspath)
             if abspath in link_cache:
@@ -302,8 +303,8 @@ class Module(object):
         link_cache[emk.scope_dir] = self
     
     def _create_interim_rule(self):
-        all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()]) | self.exe_objs
-        emk.rule(["link.__interim__"], all_objs, utils.mark_exists, threadsafe=True, ex_safe=True)
+        all_objs = set(self.obj_nosrc) | set([obj for obj, src in self.objects.items()]) | set(self.exe_objs)
+        utils.mark_exists_rule(["link.__interim__"], all_objs)
         emk.build("link.__interim__")
         
     def _simple_detect_exe(self, sourcefile):
@@ -317,26 +318,28 @@ class Module(object):
     def _create_rules(self):
         global link_cache
         
-        exe_objs = self.exe_objs
-        all_objs = self.obj_nosrc | set([obj for obj, src in self.objects.items()])
+        exe_objs = set(self.exe_objs)
+        non_exe_objs = set(self.non_exe_objs)
+        obj_nosrc = set(self.obj_nosrc)
+        all_objs = obj_nosrc | set([obj for obj, src in self.objects.items()])
         
         if not self.detect_exe:
             pass
         elif self.detect_exe.lower() == "simple":
             for obj, src in self.objects.items():
-                if (not obj in exe_objs) and (not obj in self.non_exe_objs) and self._simple_detect_exe(src):
+                if (not obj in exe_objs) and (not obj in non_exe_objs) and self._simple_detect_exe(src):
                     exe_objs.add(obj)
         elif self.detect_exe.lower() == "exact":
             for obj, src in self.objects.items():
-                if (not obj in exe_objs) and (not obj in self.non_exe_objs) and self.linker.contains_main_function(obj):
+                if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
-            for obj in self.obj_nosrc:
-                if (not obj in exe_objs) and (not obj in self.non_exe_objs) and self.linker.contains_main_function(obj):
+            for obj in obj_nosrc:
+                if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
         
         lib_objs = all_objs - exe_objs
         
-        emk.rule(["link.__exe_deps__"], ["link.__static_lib__"], utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["link.__exe_deps__"], ["link.__static_lib__"])
         
         lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         emk.depend("link.__exe_deps__", *lib_deps)
@@ -372,7 +375,7 @@ class Module(object):
                 emk.build(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
-            emk.rule(["link.__static_lib__"], [], utils.mark_exists, threadsafe=True, ex_safe=True)
+            utils.mark_exists_rule(["link.__static_lib__"], [])
         
         exe_targets = []
         exe_names = set()
@@ -392,7 +395,7 @@ class Module(object):
             emk.alias(path, name)
             exe_targets.append(path)
             
-        emk.rule(["link.__exes__"], exe_targets, utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["link.__exes__"], exe_targets)
         emk.build("link.__exes__")
     
     def _create_static_lib(self, produces, requires, args):
@@ -402,13 +405,13 @@ class Module(object):
         other_libs = set()
         if args["all_libs"]:
             other_libs.add(emk.abspath(self._static_libpath))
-            other_libs |= self.local_static_libs
-            other_libs |= self.static_libs
+            other_libs |= set(self.local_static_libs)
+            other_libs |= set(self.static_libs)
             for d in self._all_depdirs:
                 cache = link_cache[d]
                 if cache._static_libpath:
                     other_libs.add(os.path.join(d, cache._static_libpath))
-                other_libs |= cache.static_libs
+                other_libs |= set(cache.static_libs)
         else:
             objs = requires
         
@@ -421,26 +424,23 @@ class Module(object):
     def _create_shared_lib(self, produces, requires, args):
         global link_cache
         
-        flags = self.linker.shlib_opts() + self.local_flags + self.local_libflags
-        flagset = self.flags | self.libflags
+        flags = self.linker.shlib_opts() + self.local_flags + self.flags + self.local_libflags + self.libflags
 
-        abs_libs = self.local_static_libs | self.static_libs
-        syslibs = self.syslibs.copy()
-        lib_paths = self.syslib_paths.copy()
+        abs_libs = set(self.local_static_libs) | set(self.static_libs)
+        syslibs = set(self.syslibs)
+        lib_paths = self._syslib_paths.copy()
         link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
             cache = link_cache[d]
-            flagset |= cache.flags
-            flagset |= cache.libflags
+            flags += cache.flags
+            flags += cache.libflags
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
-            abs_libs |= cache.static_libs
-            syslibs |= cache.syslibs
-            lib_paths |= cache.syslib_paths
+            abs_libs |= set(cache.static_libs)
+            syslibs |= set(cache.syslibs)
+            lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
-
-        flags.extend(flagset)
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
@@ -451,28 +451,25 @@ class Module(object):
     def _create_exe(self, produces, requires, args):
         global link_cache
         
-        flags = self.linker.exe_opts() + self.local_flags + self.local_exeflags
-        flagset = self.flags | self.exeflags
+        flags = self.linker.exe_opts() + self.local_flags + self.flags + self.local_exeflags + self.exeflags
 
-        abs_libs = self.local_static_libs | self.static_libs
+        abs_libs = set(self.local_static_libs) | set(self.static_libs)
         if self._static_libpath:
             abs_libs.add(emk.abspath(self._static_libpath))
-        syslibs = self.syslibs.copy()
-        lib_paths = self.syslib_paths.copy()
+        syslibs = set(self.syslibs)
+        lib_paths = self._syslib_paths.copy()
         link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
             cache = link_cache[d]
-            flagset |= cache.flags
-            flagset |= cache.exeflags
+            flags += cache.flags
+            flags += cache.exeflags
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
-            abs_libs |= cache.static_libs
-            syslibs |= cache.syslibs
-            lib_paths |= cache.syslib_paths
+            abs_libs |= set(cache.static_libs)
+            syslibs |= set(cache.syslibs)
+            lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
-
-        flags.extend(flagset)
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)

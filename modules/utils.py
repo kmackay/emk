@@ -2,6 +2,7 @@ import os
 import errno
 import subprocess
 import traceback
+import shutil
 
 class Module(object):
     def __init__(self, scope):
@@ -28,6 +29,12 @@ class Module(object):
                 seen.add(item)
                 result.append(item)
         return result
+    
+    def rm_list(self, thelist, item):
+        try:
+            thelist.remove(item)
+        except ValueError:
+            pass
 
     def mkdirs(self, path):
         try:
@@ -83,5 +90,21 @@ class Module(object):
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
+    def mark_exists_rule(self, produces, requires):
+        emk.rule(produces, requires, self.mark_exists, threadsafe=True, ex_safe=True)
+        
     def mark_exists(self, produces, requires, args):
         emk.mark_exists(*produces)
+    
+    def copy_rule(self, dest, source):
+        emk.rule([dest], [source], self.copy_file, threadsafe=True, ex_safe=True)
+    
+    def copy_file(self, produces, requires, args):
+        dest = produces[0]
+        src = requires[0]
+        try:
+            emk.log.info("Copying %s to %s" % (src, dest))
+            shutil.copy2(src, dest)
+        except:
+            self.rm(dest)
+            raise

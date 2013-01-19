@@ -25,56 +25,56 @@ class Module(object):
         
         if parent:
             self.compile_flags = list(parent.compile_flags)
-            self.exts = parent.exts.copy()
-            self.source_files = parent.source_files.copy()
+            self.exts = list(parent.exts)
+            self.source_files = list(parent.source_files)
         
             self.autodetect = parent.autodetect
             self.autodetect_from_targets = parent.autodetect_from_targets
-            self.excludes = parent.excludes.copy()
+            self.excludes = list(parent.excludes)
             
-            self.exe_classes = parent.exe_classes.copy()
-            self.exclude_exe_classes = parent.exclude_exe_classes.copy()
+            self.exe_classes = list(parent.exe_classes)
+            self.exclude_exe_classes = list(parent.exclude_exe_classes)
             self.autodetect_exe = parent.autodetect_exe
             
-            self.resources = parent.resources.copy()
+            self.resources = list(parent.resources)
             
             self.make_jar = parent.make_jar
             self.jarname = parent.jarname
             self.jar_in_jar = parent.jar_in_jar
             self.exe_jar_in_jar = parent.exe_jar_in_jar
             
-            self.depdirs = parent.depdirs.copy()
-            self.projdirs = parent.projdirs.copy()
-            self.sysjars = parent.sysjars.copy()
+            self.depdirs = list(parent.depdirs)
+            self.projdirs = list(parent.projdirs)
+            self.sysjars = list(parent.sysjars)
             
             self.output_dir = parent.output_dir
         else:
             self.compile_flags = []
-            self.exts = set([".java"])
-            self.source_files = set()
+            self.exts = [".java"]
+            self.source_files = []
         
             self.autodetect = True
             self.autodetect_from_targets = True
-            self.excludes = set()
+            self.excludes = []
             
-            # exe_classes is a set of fully-qualified class names that contain valid main() methods.
-            self.exe_classes = set()
-            self.exclude_exe_classes = set()
+            # exe_classes is a list of fully-qualified class names that contain valid main() methods.
+            self.exe_classes = []
+            self.exclude_exe_classes = []
             self.autodetect_exe = True
             
-            # resources is a set of (source, jar-location) tuples/
+            # resources is a list of (source, jar-location) tuples/
             # source is the file that will be put into the jar
             # jar-location is the relative path that the file will be put into (relative to the jar root)
-            self.resources = set()
+            self.resources = []
             
             self.make_jar = True
             self.jarname = None
             self.jar_in_jar = False
             self.exe_jar_in_jar = True
             
-            self.depdirs = set()
-            self.projdirs = set()
-            self.sysjars = set()
+            self.depdirs = []
+            self.projdirs = []
+            self.sysjars = []
             
             self.output_dir = None
     
@@ -120,13 +120,13 @@ class Module(object):
         global sysjar_cache
         
         for d in self.projdirs:
-            self.depdirs.add(os.path.join(emk.proj_dir, d))
-        self.projdirs.clear()
-        
-        for d in self.depdirs:
-            emk.recurse(d)
+            self.depdirs.append(os.path.join(emk.proj_dir, d))
+        self.projdirs = []
         
         self._abs_depdirs = set([emk.abspath(d) for d in self.depdirs])
+        
+        for d in self._abs_depdirs:
+            emk.recurse(d)
             
         sources = set()
         
@@ -135,12 +135,12 @@ class Module(object):
                 target_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.exts)]
                 if target_files:
                     log.debug("Detected generated Java files: %s", target_files)
-                    self.source_files.update(target_files)
+                    self.source_files.extend(target_files)
                     
             files = [f for f in os.listdir(emk.scope_dir) if os.path.isfile(f)]
             for file_path in files:
                 if self._matches_exts(file_path, self.exts):
-                    self.source_files.add(file_path)
+                    self.source_files.append(file_path)
         
         for f in self.source_files:
             if not f in self.excludes:
@@ -157,14 +157,16 @@ class Module(object):
                         fqn = '.'.join(p)
                     else:
                         fqn = name
-                    self.exe_classes.add(fqn)
-        self.exe_classes -= self.exclude_exe_classes
+                    self.exe_classes.append(fqn)
+        exe_class_set = set(self.exe_classes)
+        exe_class_set -= set(self.exclude_exe_classes)
         
         if self.resources:
-            resource_sources, resource_dests = zip(*self.resources)
+            resource_set = set(self.resources)
+            resource_sources, resource_dests = zip(*resource_set)
             emk.rule(["java.__jar_resources__"], resource_sources, self._copy_resources, threadsafe=True, ex_safe=True, args={"dests": resource_dests})
         else:
-            emk.rule(["java.__jar_resources__"], [], utils.mark_exists, threadsafe=True, ex_safe=True)
+            utils.mark_exists_rule(["java.__jar_resources__"], [])
         
         emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True, ex_safe=True)
         deps = [os.path.join(d, "java.__jar_contents__") for d in self._abs_depdirs]
@@ -186,7 +188,7 @@ class Module(object):
                 expand_targets.append(target)
                 c += 1
         
-        emk.rule(["java.__expanded_deps__"], expand_targets, utils.mark_exists, threadsafe=True, ex_safe=True)
+        utils.mark_exists_rule(["java.__expanded_deps__"], expand_targets)
         deps = [os.path.join(d, "java.__expanded_deps__") for d in self._abs_depdirs]
         emk.depend("java.__expanded_deps__", *deps)
         
@@ -200,14 +202,14 @@ class Module(object):
             emk.alias(jarpath, jarname)
             emk.build(jarpath)
         
-        if self.exe_classes:
+        if exe_class_set:
             exe_jarpath = jarpath + "_exe"
             if self.make_jar and self.jar_in_jar == self.exe_jar_in_jar:
                 exe_jarpath = jarpath
             else:
                 emk.rule([exe_jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, \
                     threadsafe=True, ex_safe=True, args={"jar_in_jar": self.exe_jar_in_jar})
-            for exe in self.exe_classes:
+            for exe in exe_class_set:
                 specific_jarname = exe + ".jar"
                 specific_jarpath = os.path.join(self._output_dir, "jars", specific_jarname)
                 emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, ex_safe=True, args={"exe_class": exe})
