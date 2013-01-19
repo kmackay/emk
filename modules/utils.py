@@ -2,6 +2,7 @@ import os
 import errno
 import subprocess
 import traceback
+import shutil
 
 class Module(object):
     def __init__(self, scope):
@@ -28,6 +29,12 @@ class Module(object):
                 seen.add(item)
                 result.append(item)
         return result
+    
+    def rm_list(self, thelist, item):
+        try:
+            thelist.remove(item)
+        except ValueError:
+            pass
 
     def mkdirs(self, path):
         try:
@@ -88,3 +95,16 @@ class Module(object):
         
     def mark_exists(self, produces, requires, args):
         emk.mark_exists(*produces)
+    
+    def copy_rule(self, dest, source):
+        emk.rule([dest], [source], self.copy_file, threadsafe=True, ex_safe=True)
+    
+    def copy_file(self, produces, requires, args):
+        dest = produces[0]
+        src = requires[0]
+        try:
+            emk.log.info("Copying %s to %s" % (src, dest))
+            shutil.copy2(src, dest)
+        except:
+            self.rm(dest)
+            raise
