@@ -86,7 +86,7 @@ class Module(object):
             stack = emk.fix_stack(traceback.extract_stack()[:-1])
             if emk.options["log"] == "debug" and emk.current_rule:
                 stack.append("Rule definition:")
-                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack)
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
