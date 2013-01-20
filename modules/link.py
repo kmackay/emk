@@ -183,6 +183,7 @@ class Module(object):
             self.non_exe_objs = list(parent.non_exe_objs)
             self.objects = parent.objects.copy()
             self.obj_nosrc = list(parent.obj_nosrc)
+            self.non_lib_objs = list(parent.non_lib_objs)
             
             self.flags = list(parent.flags)
             self.local_flags = list(parent.local_flags)
@@ -223,6 +224,7 @@ class Module(object):
             self.non_exe_objs = []
             self.objects = {}
             self.obj_nosrc = []
+            self.non_lib_objs = []
             
             self.flags = []
             self.local_flags = []
@@ -338,6 +340,7 @@ class Module(object):
                     exe_objs.add(obj)
         
         lib_objs = all_objs - exe_objs
+        lib_objs -= set(self.non_lib_objs)
         
         utils.mark_exists_rule(["link.__exe_deps__"], ["link.__static_lib__"])
         
