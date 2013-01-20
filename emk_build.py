@@ -18,6 +18,7 @@ import json
 import threading
 import shutil
 import multiprocessing
+import re
 
 _module_path = os.path.realpath(__file__)
 
@@ -226,27 +227,77 @@ class _BuildError(Exception):
     def __str__(self):
         return self.msg
 
+def _style_tag(tag):
+    return "\000\001" + tag + "\001\000"
+
+class _NoStyler(object):
+    def __init__(self):
+        self.r = re.compile("\000\001([0-9A-Za-z_]*)\001\000")
+        
+    def style(self, string, record):
+        return self.r.sub('', string)
+        
+class _ConsoleStyler(object):
+    def __init__(self):
+        self.r = re.compile("\000\001([0-9A-Za-z_]*)\001\000")
+        self.styles = {"bold":"\033[1m", "u":"\033[4m", "red":"\033[31m", "green":"\033[32m", "blue":"\033[34m",
+            "important":"\033[1m\033[31m", "rule_stack":"\033[34m", "stderr":"\033[31m"}
+        
+    def style(self, string, record):
+        styles = self.styles.copy()
+        if record.levelno >= logging.WARNING:
+            styles["logtype"] = "\033[1m"
+        if record.levelno >= logging.ERROR:
+            styles["logtype"] = "\033[1m\033[31m"
+        stack = []
+        start = 0
+        bits = []
+        if record.levelno == logging.DEBUG:
+            bits.append("\033[34m")
+        m = self.r.search(string, start)
+        while m:
+            bits.append(string[start:m.start(0)])
+            if m.group(1) in self.styles:
+                stack.append(self.styles[m.group(1)])
+                bits.append(self.styles[m.group(1)])
+            elif m.group(1) == '':
+                prevstyle = stack.pop()
+                if prevstyle:
+                    bits.append("\033[0m")
+                    bits.append(''.join(stack))
+            else:
+                stack.append('')
+            
+            start = m.end(0)
+            m = self.r.search(string, start)
+        bits.append(string[start:])
+        bits.append("\033[0m")
+        return ''.join(bits)
+        
+class _HtmlStyler(object):
+    def __init__(self):
+        self.r = re.compile("\000\001([0-9A-Za-z_]+)\001\000")
+        
+    def style(self, string, record):
+        string = string.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+        string = self.r.sub(r'<span class="emk_\1">', string)
+        string = string.replace("\000\001\001\000", '</span>').replace("\n", "<br>").replace("    ", "&nbsp;&nbsp;&nbsp;&nbsp;")
+        return '<p class="emk_log emk_%s">' % (record.orig_levelname) + string + '</p>'
+
 class _Formatter(logging.Formatter):
     def __init__(self, format):
         self.format_str = format
+        self.styler = _NoStyler()
 
     def format(self, record):
         record.message = record.getMessage()
-        record.levelname = record.levelname.lower()
-        if record.levelname == "warning":
-            record.levelname = emk.BOLD_CODE + record.levelname + emk.RESET_CODE
-        elif record.levelname == "error":
-            record.levelname = emk.BOLD_CODE + emk.RED_CODE + record.levelname + emk.RESET_CODE
-        
-        if record.levelname == "debug":
-            record.message = emk.BLUE_CODE + record.message + emk.RESET_CODE
-        elif record.levelname == "error":
-            record.message = emk.RED_CODE + record.message + emk.RESET_CODE
+        record.orig_levelname = record.levelname.lower()
+        record.levelname = _style_tag('logtype') + record.levelname.lower() + _style_tag('')
             
         if "adorn" in record.__dict__ and not record.__dict__["adorn"]:
-            return record.message
+            return self.styler.style(record.message, record)
         
-        return self.format_str % record.__dict__
+        return self.styler.style(self.format_str % record.__dict__, record)
 
 def _find_project_dir():
     dir = os.getcwd()
@@ -406,8 +457,12 @@ class EMK_Base(object):
         self._build_threads = multiprocessing.cpu_count()
         self._options["threads"] = "x"
         
-        self.use_colors = True
-        self._options["colors"] = "yes"
+        stylers = {"no":_NoStyler, "console":_ConsoleStyler, "html":_HtmlStyler}
+        
+        if sys.platform == "win32":
+            self._options["colors"] = "no"
+        else:
+            self._options["colors"] = "console"
         
         self._explicit_targets = set()
         for arg in args:
@@ -435,31 +490,17 @@ class EMK_Base(object):
                                 val = 1
                         self._build_threads = val
                     elif key == "colors":
-                        if val != "yes":
+                        if val not in stylers:
+                            self.log.error("Unknown color style option '%s'", level)
                             val = "no"
-                            self.use_colors = False
                             
                     self._options[key] = val
             else:
                 self._explicit_targets.add(arg)
         
+        formatter.styler = stylers[self._options["colors"]]()
+        
         self.log.info("Using %d %s", self._build_threads, ("thread" if self._build_threads == 1 else "threads"))
-                    
-        self.RESET_CODE = ""
-        self.BOLD_CODE = ""
-        self.UNDERLINE_CODE = ""
-        self.RED_CODE = ""
-        self.GREEN_CODE = ""
-        self.YELLOW_CODE = ""
-        self.BLUE_CODE = ""
-        if self.use_colors and sys.platform != "win32":
-            self.RESET_CODE = "\033[0m"
-            self.BOLD_CODE = "\033[1m"
-            self.UNDERLINE_CODE = "\033[4m"
-            self.RED_CODE = "\033[31m"
-            self.GREEN_CODE = "\033[32m"
-            self.YELLOW_CODE = "\033[33m"
-            self.BLUE_CODE = "\033[34m"
         
         if "clean" in self._explicit_targets:
             self._cleaning = True
@@ -689,7 +730,8 @@ class EMK_Base(object):
                 exists, m = self._get_mod_time(abs_path, lock=False)
                 
                 if not exists:
-                    raise _BuildError("%s should have been produced by the rule" % (abs_path), rule.stack)
+                    rulestack = ["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack]
+                    raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
                 
                 if abs_path in self._modtime_cache:
                     if not t._untouched and built:
@@ -770,7 +812,7 @@ class EMK_Base(object):
                 self._set_bad_rule(rule)
                 lines = ["    %s" % (line) for line in _get_exception_info()]
                 lines.append("Rule definition:")
-                lines.extend(["    %s" % (line) for line in rule.stack])
+                lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
                 self._buildable_rules.error(_BuildError("Error running rule", lines))
                 return
             except:
@@ -1080,11 +1122,11 @@ class EMK_Base(object):
     
     def _print_bad_rule(self):
         if self._bad_rule:
-            print(emk.UNDERLINE_CODE + "A rule may have been partially executed." + emk.RESET_CODE)
-            print("Rule definition:")
-            for line in self._bad_rule.stack:
-                print("    %s" % (line))
-            print(emk.BOLD_CODE + emk.RED_CODE + "You should clean before rebuilding." + emk.RESET_CODE)
+            lines = [_style_tag('u') + "A rule may have been partially executed." + _style_tag('')]
+            lines.append("Rule definition:")
+            lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in self._bad_rule.stack])
+            lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
+            self.error_print('\n'.join(lines))
 
 class EMK(EMK_Base):
     def __init__(self, args):
@@ -1422,6 +1464,16 @@ class EMK(EMK_Base):
         d = {'adorn':False}
         self.log.info(format, *args, extra=d)
     
+    def error_print(self, format, *args):
+        d = {'adorn':False}
+        self.log.error(format, *args, extra=d)
+    
+    def style_tag(self, tag):
+        return _style_tag(tag)
+    
+    def end_style(self):
+        return _style_tag('')
+    
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
     
@@ -1453,14 +1505,13 @@ def main(args):
         setup(args).run(os.getcwd())
         return 0
     except KeyboardInterrupt:
-        print("\nemk: Interrupted")
+        emk.error_print("\nemk: Interrupted")
         emk._print_bad_rule()
         return 1
     except _BuildError as e:
-        print(emk.BOLD_CODE + emk.RED_CODE + "Build error:" + emk.RESET_CODE + " %s" % (e), file=sys.stderr)
+        lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
         if e.extra_info:
-            for line in e.extra_info:
-                s = line.replace('\n', "\n    ")
-                print("    %s" % (s), file=sys.stderr)
+            lines.extend(["    " + line.replace('\n', "\n    ") for line in e.extra_info])
+        emk.error_print('\n'.join(lines))
         emk._print_bad_rule()
         return 1
