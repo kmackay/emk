@@ -967,10 +967,6 @@ class EMK_Base(object):
         # load global config
         self.scope.prepare_do_later()
         search_paths = [os.path.join(self._emk_dir, "config")]
-        env_paths = os.environ.get('EMK_CONFIG_DIRS')
-        if env_paths:
-            search_paths = env_paths.split(':')
-        
         self._import_from(search_paths, "emk_global", set_scope_dir=True)
         self._run_module_post_functions()
         self._run_do_later_funcs()
