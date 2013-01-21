@@ -196,7 +196,7 @@ class Module(object):
         jarname = dirname + ".jar"
         if self.jarname:
             jarname = self.jarname
-        jarpath = os.path.join(self._output_dir, "jars", jarname)
+        jarpath = os.path.join(emk.build_dir, jarname)
         if self.make_jar:
             emk.rule([jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, ex_safe=True, args={"jar_in_jar": self.jar_in_jar})
             emk.alias(jarpath, jarname)
@@ -211,7 +211,7 @@ class Module(object):
                     threadsafe=True, ex_safe=True, args={"jar_in_jar": self.exe_jar_in_jar})
             for exe in exe_class_set:
                 specific_jarname = exe + ".jar"
-                specific_jarpath = os.path.join(self._output_dir, "jars", specific_jarname)
+                specific_jarpath = os.path.join(emk.build_dir, specific_jarname)
                 emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, ex_safe=True, args={"exe_class": exe})
                 emk.alias(specific_jarpath, specific_jarname)
                 emk.build(specific_jarpath)
@@ -291,9 +291,6 @@ class Module(object):
         
     def _make_jar(self, produces, requires, args):
         global sysjar_cache
-        
-        jar_dir = os.path.join(self._output_dir, "jars")
-        utils.mkdirs(jar_dir)
         
         jarfile = produces[0]
         
