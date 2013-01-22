@@ -108,3 +108,14 @@ class Module(object):
         except:
             self.rm(dest)
             raise
+    
+    class cd(object):
+        def __init__(self, path):
+            self.dest = path
+        
+        def __enter__(self):
+            self.orig = os.getcwd()
+            os.chdir(self.dest)
+        
+        def __exit__(self, *args):
+            os.chdir(self.orig)
