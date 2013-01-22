@@ -257,9 +257,9 @@ class _ConsoleStyler(object):
         m = self.r.search(string, start)
         while m:
             bits.append(string[start:m.start(0)])
-            if m.group(1) in self.styles:
-                stack.append(self.styles[m.group(1)])
-                bits.append(self.styles[m.group(1)])
+            if m.group(1) in styles:
+                stack.append(styles[m.group(1)])
+                bits.append(styles[m.group(1)])
             elif m.group(1) == '':
                 prevstyle = stack.pop()
                 if prevstyle:
