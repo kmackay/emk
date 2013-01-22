@@ -3,6 +3,9 @@ import errno
 import subprocess
 import traceback
 import shutil
+import logging
+
+log = logging.getLogger("emk.utils")
 
 class Module(object):
     def __init__(self, scope):
@@ -46,10 +49,11 @@ class Module(object):
                 raise
 
     def rm(self, path):
+        log.info("Removing %s", path)
         try:
             os.remove(path)
         except OSError:
-            pass
+            shutil.rmtree(path, ignore_errors=True)
 
     def call(self, *args, **kwargs):
         print_call = True
