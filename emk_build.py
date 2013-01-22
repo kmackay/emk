@@ -699,7 +699,9 @@ class EMK_Base(object):
                 self._examine_target(t)
 
         if not target.rule:
-            if not target.abs_path in self._requires_rule:
+            if target.abs_path in self._requires_rule:
+                self._need_undefined_rule = True
+            else:
                 exists, target.mod_time = self._get_mod_time(target.abs_path)
                 if exists:
                     target._built = True
@@ -707,6 +709,8 @@ class EMK_Base(object):
                     self.log.debug("Allowing nonexistent %s", target.abs_path)
                     target.mod_time = time.time()
                     target._built = True
+                else:
+                    self._need_undefined_rule = True
         elif not target.rule._want_build:
             target.rule._want_build = True
             target.rule._remaining_unbuilt_reqs = 0
@@ -837,6 +841,8 @@ class EMK_Base(object):
                 if target.rule:
                     target.rule._want_build = False
         
+        self._need_undefined_rule = False
+        
         # revisit all targets that we want to build that were not built previously
         for target in self._toplevel_examined_targets:
             if not target._built:
@@ -855,7 +861,7 @@ class EMK_Base(object):
                     else:
                         leftover_explicit_targets.add(target)
 
-            if (not self._explicit_targets) or leftover_explicit_targets:
+            if (not self._explicit_targets) or leftover_explicit_targets or self._need_undefined_rule:
                 for target in self._fixed_auto_targets:
                     self._toplevel_examine_target(target)
 
