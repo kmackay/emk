@@ -6,8 +6,6 @@ import shutil
 
 log = logging.getLogger("emk.link")
 
-main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
-
 utils = emk.module("utils")
 
 class _GccLinker(object):
@@ -18,10 +16,12 @@ class _GccLinker(object):
         self.ar_path = path_prefix + "ar"
         self.strip_path = path_prefix + "strip"
         self.nm_path = path_prefix + "nm"
+        
+        self.main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
     
     def contains_main_function(self, objfile):
         out, err, code = utils.call(self.nm_path, "-g", objfile, print_call=False)
-        if main_nm_regex.search(out):
+        if self.main_nm_regex.search(out):
             return True
         return False
         
@@ -144,13 +144,14 @@ class _OsxGccLinker(_GccLinker):
         
 link_cache = {}
 need_depdirs = {}
-comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
-main_function_regex = re.compile(r'int\s+main\s*\(')
 
 class Module(object):
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
         self.OsxGccLinker = _OsxGccLinker
+        
+        self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
+        self.main_function_regex = re.compile(r'int\s+main\s*\(')
         
         self._all_depdirs = set()
         self._depended_by = set()
@@ -324,8 +325,8 @@ class Module(object):
     def _simple_detect_exe(self, sourcefile):
         with open(sourcefile) as f:
             data = f.read()
-            text = comments_regex.sub('', data)
-            if main_function_regex.search(text):
+            text = self.comments_regex.sub('', data)
+            if self.main_function_regex.search(text):
                 return True
             return False
 
