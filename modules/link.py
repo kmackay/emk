@@ -296,15 +296,15 @@ class Module(object):
             emk.require_rule("link.__static_lib__", "link.__lib_in_lib__", "link.__shared_lib__", "link.__exe_deps__", "link.__exes__")
             dirname = os.path.basename(emk.scope_dir)
             if self.make_static_lib:
-                libname = "lib" + dirname + self.static_lib_ext
+                libname = self.lib_prefix + dirname + self.static_lib_ext
                 emk.require_rule(os.path.join(emk.build_dir, libname))
                 if self.lib_in_lib:
-                    libname = "lib" + dirname + "_all" + self.static_lib_ext
+                    libname = self.lib_prefix + dirname + "_all" + self.static_lib_ext
                     if self.static_libname:
                         libname = self.static_libname
                     emk.require_rule(os.path.join(emk.build_dir, libname))
             if self.make_shared_lib:
-                libname = "lib" + dirname + self.shared_lib_ext
+                libname = self.lib_prefix + dirname + self.shared_lib_ext
                 if self.shared_libname:
                     libname = self.shared_libname
                 emk.require_rule(os.path.join(emk.build_dir, libname))
@@ -365,14 +365,14 @@ class Module(object):
         if lib_objs:
             if self.make_static_lib:
                 making_static_lib = True
-                libname = "lib" + dirname + self.static_lib_ext
+                libname = self.lib_prefix + dirname + self.static_lib_ext
                 libpath = os.path.join(emk.build_dir, libname)
                 self._static_libpath = libpath
                 emk.rule([libpath], lib_objs, self._create_static_lib, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True, args={"all_libs": False})
                 emk.alias(libpath, "link.__static_lib__")
                 emk.build(libpath)
             if self.make_shared_lib:
-                libname = "lib" + dirname + self.shared_lib_ext
+                libname = self.lib_prefix + dirname + self.shared_lib_ext
                 if self.shared_libname:
                     libname = self.shared_libname
                 libpath = os.path.join(emk.build_dir, libname)
@@ -383,7 +383,7 @@ class Module(object):
             utils.mark_exists_rule(["link.__static_lib__"], [])
         
         if self.make_static_lib and self.lib_in_lib:
-            libname = "lib" + dirname + "_all" + self.static_lib_ext
+            libname = self.lib_prefix + dirname + "_all" + self.static_lib_ext
             if self.static_libname:
                 libname = self.static_libname
             libpath = os.path.join(emk.build_dir, libname)
