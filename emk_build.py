@@ -391,7 +391,7 @@ def _make_require_abspath(rel_path, scope):
 class EMK_Base(object):
     def __init__(self, args):
         self.log = logging.getLogger("emk")
-        handler = logging.StreamHandler()
+        handler = logging.StreamHandler(sys.stdout)
         formatter = _Formatter("%(name)s (%(levelname)s): %(message)s")
         handler.setFormatter(formatter)
         self.log.addHandler(handler)
