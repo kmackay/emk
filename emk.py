@@ -1415,7 +1415,7 @@ class EMK(EMK_Base):
             else:
                 self._attached_dependencies[abspath] = list(fixed_depends)
     
-    def build(self, *targets):
+    def autobuild(self, *targets):
         with self._lock:
             for target in targets:
                 self.log.debug("Marking %s for automatic build", target)

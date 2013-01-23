@@ -319,7 +319,7 @@ class Module(object):
     def _create_interim_rule(self):
         all_objs = set(self.obj_nosrc) | set([obj for obj, src in self.objects.items()]) | set(self.exe_objs)
         utils.mark_exists_rule(["link.__interim__"], all_objs)
-        emk.build("link.__interim__")
+        emk.autobuild("link.__interim__")
         
     def _simple_detect_exe(self, sourcefile):
         with open(sourcefile) as f:
@@ -370,14 +370,14 @@ class Module(object):
                 self._static_libpath = libpath
                 emk.rule([libpath], lib_objs, self._create_static_lib, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True, args={"all_libs": False})
                 emk.alias(libpath, "link.__static_lib__")
-                emk.build(libpath)
+                emk.autobuild(libpath)
             if self.make_shared_lib:
                 libname = self.lib_prefix + dirname + self.shared_lib_ext
                 if self.shared_libname:
                     libname = self.shared_libname
                 libpath = os.path.join(emk.build_dir, libname)
                 emk.rule([libpath], ["link.__exe_deps__"] + list(lib_objs), self._create_shared_lib, threadsafe=self.linker.link_threadsafe(), ex_safe=True)
-                emk.build(libpath)
+                emk.autobuild(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
             utils.mark_exists_rule(["link.__static_lib__"], [])
@@ -390,7 +390,7 @@ class Module(object):
             emk.rule([libpath], ["link.__static_lib__", "link.__exe_deps__"], self._create_static_lib, \
                 threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True, args={"all_libs": True})
             emk.alias(libpath, "link.__lib_in_lib__")
-            emk.build(libpath)
+            emk.autobuild(libpath)
         
         exe_targets = []
         exe_names = set()
@@ -411,7 +411,7 @@ class Module(object):
             exe_targets.append(path)
             
         utils.mark_exists_rule(["link.__exes__"], exe_targets)
-        emk.build("link.__exes__")
+        emk.autobuild("link.__exes__")
     
     def _create_static_lib(self, produces, requires, args):
         global link_cache

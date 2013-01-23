@@ -199,7 +199,7 @@ class Module(object):
         if self.make_jar:
             emk.rule([jarpath], ["java.__jar_contents__"], self._make_jar, threadsafe=True, ex_safe=True, args={"jar_in_jar": self.jar_in_jar})
             emk.alias(jarpath, jarname)
-            emk.build(jarpath)
+            emk.autobuild(jarpath)
         
         if exe_class_set:
             exe_jarpath = jarpath + "_exe"
@@ -212,7 +212,7 @@ class Module(object):
                 specific_jarpath = os.path.join(self._jar_dir, specific_jarname)
                 emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, ex_safe=True, args={"exe_class": exe})
                 emk.alias(specific_jarpath, specific_jarname)
-                emk.build(specific_jarpath)
+                emk.autobuild(specific_jarpath)
         
         self._classpaths = set([self._class_dir])
         self._jar_contents = set([self._class_dir, self._resource_dir])
