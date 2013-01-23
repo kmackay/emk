@@ -25,9 +25,9 @@ class _GccLinker(object):
             return True
         return False
         
-    def extract_static_lib(self, lib):
+    def extract_static_lib(self, lib, dest_dir):
         log.info("Extracting lib %s", lib)
-        utils.call(self.ar_path, "x", lib, print_call=False)
+        utils.call(self.ar_path, "x", lib, print_call=False, cwd=dest_dir)
     
     def add_to_static_lib(self, dest, objs):
         utils.call(self.ar_path, "r", dest, *objs)
@@ -36,21 +36,22 @@ class _GccLinker(object):
         objs = list(source_objs)
         dump_dir = os.path.join(emk.build_dir, "__lib_temp__")
         utils.mkdirs(dump_dir)
-        with utils.cd(dump_dir):
-            counter = 0
-            for lib in other_libs:
-                d = "%s" % (counter)
-                shutil.rmtree(d, ignore_errors=True)
-                os.mkdir(d)
-                with utils.cd(d):
-                    self.extract_static_lib(lib)
-                    files = [f for f in os.listdir(os.getcwd()) if os.path.isfile(f) and f.endswith(".o")]
-                    for file_path in files:
-                        name, ext = os.path.splitext(file_path)
-                        new_name = "%s_%s%s" % (name, counter, ext)
-                        os.rename(file_path, new_name)
-                        objs.append(os.path.realpath(new_name))
-                counter += 1
+
+        counter = 0
+        for lib in other_libs:
+            d = os.path.join(dump_dir,"%d" % (counter))
+            shutil.rmtree(d, ignore_errors=True)
+            os.mkdir(d)
+            
+            self.extract_static_lib(lib, d)
+            files = [f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f)) and f.endswith(".o")]
+            for file_path in files:
+                name, ext = os.path.splitext(file_path)
+                new_name = "%s_%s%s" % (name, counter, ext)
+                new_path = os.path.join(d, new_name)
+                os.rename(os.path.join(d, file_path), new_path)
+                objs.append(new_path)
+            counter += 1
         
         utils.rm(dest)
         
@@ -63,11 +64,9 @@ class _GccLinker(object):
             self.add_to_static_lib(dest, cur_objs)
         cur_objs = objs[start:]
         self.add_to_static_lib(dest, cur_objs)
-        
-        shutil.rmtree(dump_dir, ignore_errors=True)
     
     def static_lib_threadsafe(self):
-        return False
+        return True
     
     def shlib_opts(self):
         return ["-shared"]
@@ -105,25 +104,25 @@ class _OsxGccLinker(_GccLinker):
         self.lipo_path = self.path_prefix + "lipo"
         self.libtool_path = self.path_prefix + "libtool"
     
-    def extract_static_lib(self, lib):
+    def extract_static_lib(self, lib, dest_dir):
         log.info("Extracting lib %s", lib)
         out, err, ret = utils.call(self.lipo_path, "-info", lib, print_call=False)
         if "is not a fat file" in out:
-            utils.call(self.ar_path, "x", lib, print_call=False)
+            utils.call(self.ar_path, "x", lib, print_call=False, cwd=dest_dir)
         else:
             start, mid, rest = out.partition(lib + " are:")
             archs = rest.strip().split(' ')
             objs = set()
             for arch in archs:
-                os.mkdir(arch)
-                utils.call(self.lipo_path, lib, "-thin", arch, "-output", os.path.join(arch, "thin.a"), print_call=False)
-                with utils.cd(arch):
-                    utils.call(self.ar_path, "x", "thin.a", print_call=False)
-                    objs.update([f for f in os.listdir(os.getcwd()) if os.path.isfile(f) and f.endswith(".o")])
+                arch_dir = os.path.join(dest_dir, arch)
+                os.mkdir(arch_dir)
+                utils.call(self.lipo_path, lib, "-thin", arch, "-output", os.path.join(arch_dir, "thin.a"), print_call=False)
+                utils.call(self.ar_path, "x", "thin.a", print_call=False, cwd=arch_dir)
+                objs.update([f for f in os.listdir(arch_dir) if os.path.isfile(os.path.join(arch_dir, f)) and f.endswith(".o")])
             for obj in objs:
-                cmd = [self.lipo_path, "-create", "-output", obj]
+                cmd = [self.lipo_path, "-create", "-output", os.path.join(dest_dir, obj)]
                 for arch in archs:
-                    arch_obj = os.path.join(arch, obj)
+                    arch_obj = os.path.join(dest_dir, arch, obj)
                     if os.path.isfile(arch_obj):
                         cmd.append(arch_obj)
                 utils.call(*cmd, print_call=False)
