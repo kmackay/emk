@@ -4,15 +4,16 @@ import subprocess
 import traceback
 import shutil
 import logging
+import glob
 
 log = logging.getLogger("emk.utils")
 
 class Module(object):
     def __init__(self, scope):
-        pass
+        self._clean_rules = 0
     
     def new_scope(self, scope):
-        return self
+        return Module(scope)
         
     def flatten_flags(self, flags):
         result = []
@@ -50,11 +51,25 @@ class Module(object):
 
     def rm(self, path, print_msg=False):
         if print_msg:
-            log.info("Removing %s", path)
+            if os.path.isabs(path):
+                log.info("Removing %s", path)
+            else:
+                log.info("Removing %s", os.path.realpath(os.path.join(os.getcwd(), path)))
         try:
             os.remove(path)
         except OSError:
             shutil.rmtree(path, ignore_errors=True)
+    
+    class cd(object):
+        def __init__(self, path):
+            self.dest = path
+
+        def __enter__(self):
+            self.orig = os.getcwd()
+            os.chdir(self.dest)
+
+        def __exit__(self, *args):
+            os.chdir(self.orig)
 
     def call(self, *args, **kwargs):
         print_call = True
@@ -101,7 +116,7 @@ class Module(object):
     def mark_exists(self, produces, requires, args):
         emk.mark_exists(*produces)
     
-    def copy_rule(self, dest, source):
+    def copy_rule(self, source, dest):
         emk.rule([dest], [source], self.copy_file, threadsafe=True, ex_safe=True)
     
     def copy_file(self, produces, requires, args):
@@ -109,18 +124,22 @@ class Module(object):
         src = requires[0]
         try:
             emk.log.info("Copying %s to %s" % (src, dest))
+            destdir = os.path.dirname(dest)
+            self.mkdirs(destdir)
             shutil.copy2(src, dest)
         except:
             self.rm(dest)
             raise
+
+    def clean_rule(self, *patterns):
+        target = "__clean_rule_%d__" % (self._clean_rules)
+        self._clean_rules += 1
+        emk.rule([target], [emk.ALWAYS_BUILD], self.do_cleanup, args=patterns)
+        emk.attach("clean", target)
     
-    class cd(object):
-        def __init__(self, path):
-            self.dest = path
-        
-        def __enter__(self):
-            self.orig = os.getcwd()
-            os.chdir(self.dest)
-        
-        def __exit__(self, *args):
-            os.chdir(self.orig)
+    def do_cleanup(self, produces, requires, args):
+        patterns = args
+        for pattern in patterns:
+            for f in glob.glob(pattern):
+                self.rm(f, print_msg=True)
+        emk.mark_exists(*produces)
