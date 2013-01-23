@@ -94,6 +94,7 @@ class _ScopeData(object):
             self.recurse_dirs = set()
             
         self.modules = {} # map module name to instance (_Module_Instance)
+        self.weak_modules = {}
         
         self.targets = {} # map original target name->target for the current scope
     
@@ -1092,6 +1093,82 @@ class EMK_Base(object):
         for d in recurse_dirs:
             self._handle_dir(d)
     
+    def _module(self, name, weak):
+        # if the module has already been loaded in the current scope, return the existing instance
+        if name in self.scope.modules:
+            return self.scope.modules[name].instance
+
+        if name in self.scope.weak_modules:
+            mod = self.scope.weak_modules[name]
+            if not weak:
+                self.scope.modules[name] = mod
+            return.instance
+
+        if self.building:
+            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            raise _BuildError("Cannot load a new module when building", stack)
+
+        # if any of the parent scopes contain an instance, return a new instance with that as a parent
+        cur = self.scope.parent
+        while cur:
+            d = None
+            if name in cur.modules:
+                d = cur.modules
+            elif name in cur.weak_modules:
+                d = cur.weak_modules
+
+            if d:
+                try:
+                    instance = d[name].instance.new_scope(self.scope_name)
+                except _BuildError:
+                    raise
+                except Exception:
+                    raise _BuildError("Error creating new scope for module %s" % (name), _get_exception_info())
+
+                mod = _Module_Instance(name, instance, d[name].mod)
+                _try_call_method(mod, "load_" + self.scope_name)
+                if weak:
+                    self.scope.weak_modules[name] = mod
+                else:
+                    self.scope.modules[name] = mod
+                return instance
+            cur = cur.parent
+
+        # otherwise, try to load the module from the module paths
+        oldpath = os.getcwd()
+        fp = None
+        try:
+            fixed_module_paths = [_make_target_abspath(path, self.scope) for path in self.scope.module_paths]
+            self.log.debug("Trying to load module %s from %s", name, fixed_module_paths)
+            fp, pathname, description = imp.find_module(name, fixed_module_paths)
+            mpath = os.path.realpath(pathname)
+            if not mpath in self._all_loaded_modules:
+                d, tail = os.path.split(mpath)
+                os.chdir(d)
+                self._all_loaded_modules[mpath] = imp.load_module(name, fp, pathname, description)
+
+            instance = self._all_loaded_modules[mpath].Module(self.scope_name)
+            mod = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
+            _try_call_method(mod, "load_" + self.scope_name)
+            if weak:
+                self.scope.weak_modules[name] = mod
+            else:
+                self.scope.modules[name] = mod
+            return instance
+        except ImportError:
+            pass
+        except _BuildError:
+            raise
+        except Exception:
+            raise _BuildError("Error loading module %s" % (name), _get_exception_info())
+        finally:
+            os.chdir(oldpath)
+            if fp:
+                fp.close()
+
+        self.log.info("Module %s not found", name)
+        return None
+    
     def _rule(self, produces, requires, args, func, threadsafe, ex_safe, stack):
         seen_produces = set()
         fixed_produces = []
@@ -1257,77 +1334,31 @@ class EMK(EMK_Base):
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call insert_module() when building", stack)
             
-        if name in self.scope.modules:
+        if name in self.scope.modules or name in self.scope.weak_modules:
             self.log.warning("Cannot insert over pre-existing '%s' module", name)
             return None
         
         mod = _Module_Instance(name, instance, None)
         _try_call_method(mod, "load_" + self.scope.scope_type)
-        self.scope.modules[name] = mod
+        self.scope.weak_modules[name] = mod
         return instance
 
     def module(self, name):
-        # if the module has already been loaded in the current scope, return the existing instance
-        if name in self.scope.modules:
-            return self.scope.modules[name].instance
-        
-        if self.building:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            raise _BuildError("Cannot load a new module when building", stack)
-        
-        # if any of the parent scopes contain an instance, return a new instance with that as a parent
-        cur = self.scope.parent
-        while cur:
-            if name in cur.modules:
-                try:
-                    instance = cur.modules[name].instance.new_scope(self.scope_name)
-                except _BuildError:
-                    raise
-                except Exception:
-                    raise _BuildError("Error creating new scope for module %s" % (name), _get_exception_info())
-                
-                mod = _Module_Instance(name, instance, cur.modules[name].mod)
-                _try_call_method(mod, "load_" + self.scope_name)
-                self.scope.modules[name] = mod
-                return instance
-            cur = cur.parent
-        
-        # otherwise, try to load the module from the module paths
-        oldpath = os.getcwd()
-        fp = None
-        try:
-            fixed_module_paths = [_make_target_abspath(path, self.scope) for path in self.scope.module_paths]
-            self.log.debug("Trying to load module %s from %s", name, fixed_module_paths)
-            fp, pathname, description = imp.find_module(name, fixed_module_paths)
-            mpath = os.path.realpath(pathname)
-            if not mpath in self._all_loaded_modules:
-                d, tail = os.path.split(mpath)
-                os.chdir(d)
-                self._all_loaded_modules[mpath] = imp.load_module(name, fp, pathname, description)
-            
-            instance = self._all_loaded_modules[mpath].Module(self.scope_name)
-            mod = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
-            _try_call_method(mod, "load_" + self.scope_name)
-            self.scope.modules[name] = mod
-            return instance
-        except ImportError:
-            pass
-        except _BuildError:
-            raise
-        except Exception:
-            raise _BuildError("Error loading module %s" % (name), _get_exception_info())
-        finally:
-            os.chdir(oldpath)
-            if fp:
-                fp.close()
-        
-        self.log.info("Module %s not found", name)
-        return None
+        return self._module(name, weak=False)
     
     def modules(self, *names):
         mods = []
         for name in names:
-            mods.append(self.module(name))
+            mods.append(self._module(name, weak=False))
+        return mods
+    
+    def weak_module(self, name):
+        return self._module(name, weak=True)
+
+    def weak_modules(self, *names):
+        mods = []
+        for name in names:
+            mods.append(self._module(name, weak=True))
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
