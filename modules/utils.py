@@ -48,8 +48,9 @@ class Module(object):
             else:
                 raise
 
-    def rm(self, path):
-        log.info("Removing %s", path)
+    def rm(self, path, print_msg=False):
+        if print_msg:
+            log.info("Removing %s", path)
         try:
             os.remove(path)
         except OSError:
