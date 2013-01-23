@@ -3,6 +3,9 @@ import errno
 import subprocess
 import traceback
 import shutil
+import logging
+
+log = logging.getLogger("emk.utils")
 
 class Module(object):
     def __init__(self, scope):
@@ -45,11 +48,13 @@ class Module(object):
             else:
                 raise
 
-    def rm(self, path):
+    def rm(self, path, print_msg=False):
+        if print_msg:
+            log.info("Removing %s", path)
         try:
             os.remove(path)
         except OSError:
-            pass
+            shutil.rmtree(path, ignore_errors=True)
 
     def call(self, *args, **kwargs):
         print_call = True
@@ -75,18 +80,18 @@ class Module(object):
         if print_call:
             strings.append(' '.join(args))
         if print_stdout and proc_stdout:
-            strings.append(emk.UNDERLINE_CODE + "Subprocess stdout:" + emk.RESET_CODE)
-            strings.append(proc_stdout)
+            strings.append(emk.style_tag('u') + "Subprocess stdout:" + emk.end_style())
+            strings.append(emk.style_tag('stdout') + proc_stdout + emk.end_style())
         if (print_stderr == True or (print_stderr == "nonzero" and proc.returncode != 0)) and proc_stderr:
-            strings.append(emk.UNDERLINE_CODE + "Subprocess stderr:" + emk.RESET_CODE)
-            strings.append(emk.RED_CODE + proc_stderr + emk.RESET_CODE)
+            strings.append(emk.style_tag('u') + "Subprocess stderr:" + emk.end_style())
+            strings.append(emk.style_tag('stderr') + proc_stderr + emk.end_style())
         if strings:
             emk.log_print('\n'.join(strings))
         if exit_on_nonzero_return and proc.returncode != 0:
-            stack = [emk.BLUE_CODE + line + emk.RESET_CODE for line in emk.fix_stack(traceback.extract_stack()[:-1])]
+            stack = emk.fix_stack(traceback.extract_stack()[:-1])
             if emk.options["log"] == "debug" and emk.current_rule:
                 stack.append("Rule definition:")
-                stack.extend(["    " + line for line in emk.current_rule.stack])
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
@@ -108,3 +113,14 @@ class Module(object):
         except:
             self.rm(dest)
             raise
+    
+    class cd(object):
+        def __init__(self, path):
+            self.dest = path
+        
+        def __enter__(self):
+            self.orig = os.getcwd()
+            os.chdir(self.dest)
+        
+        def __exit__(self, *args):
+            os.chdir(self.orig)

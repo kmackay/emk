@@ -64,6 +64,8 @@ class Module(object):
             self.include_dirs = list(parent.include_dirs)
             self.defines = parent.defines.copy()
             self.flags = list(parent.flags)
+            
+            self.source_files = list(parent.source_files)
 
             self.c.include_dirs = list(parent.c.include_dirs)
             self.c.defines = parent.c.defines.copy()
@@ -80,12 +82,16 @@ class Module(object):
             self.autodetect = parent.autodetect
             self.autodetect_from_targets = parent.autodetect_from_targets
             self.excludes = list(parent.excludes)
+            self.non_lib_src = list(parent.non_lib_src)
+            self.non_exe_src = list(parent.non_exe_src)
         else:
             self.compiler = _GccCompiler()
             
             self.include_dirs = []
             self.defines = {}
             self.flags = []
+            
+            self.source_files = []
             
             self.c.include_dirs = []
             self.c.defines = {}
@@ -102,6 +108,8 @@ class Module(object):
             self.autodetect = True
             self.autodetect_from_targets = True
             self.excludes = []
+            self.non_lib_src = []
+            self.non_exe_src = []
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -122,6 +130,9 @@ class Module(object):
         c_sources = set()
         cxx_sources = set()
         
+        self._non_exe_src = set(self.non_exe_src)
+        self._non_lib_src = set(self.non_lib_src)
+        
         if self.autodetect:
             if self.autodetect_from_targets:
                 target_c_files = [t for t in emk.local_targets.keys() if self._matches_exts(t, self.c.exts)]
@@ -134,7 +145,8 @@ class Module(object):
                     log.debug("Detected generated C++ files: %s", target_cxx_files)
                     self.cxx.source_files.extend(target_cxx_files)
                     
-            files = [f for f in os.listdir(emk.scope_dir) if os.path.isfile(f)]
+            files = set(self.source_files)
+            files.update([f for f in os.listdir(emk.scope_dir) if os.path.isfile(f)])
             for file_path in files:
                 if self._matches_exts(file_path, self.c.exts):
                     self.c.source_files.append(file_path)
@@ -182,6 +194,12 @@ class Module(object):
             name = "%s_%s" % (n, c)
             c += 1
         objs[name] = src
+        if self.link:
+            objpath = os.path.join(emk.build_dir, name + ".o")
+            if src in self._non_exe_src:
+                self.link.non_exe_objs.append(objpath)
+            if src in self._non_lib_src:
+                self.link.non_lib_objs.append(objpath)
         
         dest = os.path.join(emk.build_dir, name + ".o")
         requires = [src]

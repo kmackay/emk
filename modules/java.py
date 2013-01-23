@@ -196,7 +196,7 @@ class Module(object):
         jarname = dirname + ".jar"
         if self.jarname:
             jarname = self.jarname
-        jarpath = os.path.join(self._output_dir, "jars", jarname)
+        jarpath = os.path.join(emk.build_dir, jarname)
         if self.make_jar:
             emk.rule([jarpath], ["java.__jar_contents__", "java.__expanded_deps__"], self._make_jar, threadsafe=True, ex_safe=True, args={"jar_in_jar": self.jar_in_jar})
             emk.alias(jarpath, jarname)
@@ -211,7 +211,7 @@ class Module(object):
                     threadsafe=True, ex_safe=True, args={"jar_in_jar": self.exe_jar_in_jar})
             for exe in exe_class_set:
                 specific_jarname = exe + ".jar"
-                specific_jarpath = os.path.join(self._output_dir, "jars", specific_jarname)
+                specific_jarpath = os.path.join(emk.build_dir, specific_jarname)
                 emk.rule([specific_jarpath], [exe_jarpath], self._make_exe_jar, threadsafe=True, ex_safe=True, args={"exe_class": exe})
                 emk.alias(specific_jarpath, specific_jarname)
                 emk.build(specific_jarpath)
@@ -292,27 +292,44 @@ class Module(object):
     def _make_jar(self, produces, requires, args):
         global sysjar_cache
         
-        jar_dir = os.path.join(self._output_dir, "jars")
-        utils.mkdirs(jar_dir)
-        
         jarfile = produces[0]
         
-        dirs = set([self._local_classpath])
+        dirset = set([self._local_classpath])
         if args["jar_in_jar"]:
-            dirs |= self._classpaths
+            dirset |= self._classpaths
             for jar in self._sysjars:
-                dirs.add(sysjar_cache[jarpath])
+                dirset.add(sysjar_cache[jarpath])
+        dirs = [(d, "") for d in dirset]
         
-        cmd = ["jar", "cf", jarfile]
-        have_contents = False
-        for d in dirs:
-            entries = os.listdir(d)
-            if entries:
-                for entry in entries:
-                    cmd.extend(["-C", d, entry])
-                have_contents = True
+        entries = {}
+        visited_dirs = set()
+        while dirs:
+            copy = dirs
+            dirs = []
+            for d, relpath in copy:
+                if d in visited_dirs:
+                    continue
+                visited_dirs.add(d)
+                
+                subs = os.listdir(d)
+                for f in subs:
+                    path = os.path.join(d, f)
+                    if os.path.isfile(path):
+                        entries[os.path.join(relpath, f)] = path
+                    else:
+                        dirs.append((path, os.path.join(relpath, f)))
         
-        if have_contents:
+        if entries:
+            jarfile_contents = jarfile + ".contents"
+            utils.rm(jarfile_contents)
+            utils.mkdirs(jarfile_contents)
+        
+            for relpath, srcpath in entries.items():
+                destpath = os.path.join(jarfile_contents, relpath)
+                utils.mkdirs(os.path.dirname(destpath))
+                shutil.copy2(srcpath, destpath)
+        
+            cmd = ["jar", "cf", jarfile, "-C", jarfile_contents, "."]
             try:
                 utils.call(*cmd)
                 utils.call("jar", "i", jarfile)
