@@ -1102,7 +1102,7 @@ class EMK_Base(object):
             mod = self.scope.weak_modules[name]
             if not weak:
                 self.scope.modules[name] = mod
-            return.instance
+            return mod.instance
 
         if self.building:
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
