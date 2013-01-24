@@ -414,8 +414,7 @@ class EMK_Base(object):
         
         self._visited_dirs = {}
         self._current_proj_dir = None
-        self._stored_proj_scopes = {} # map project path to loaded project scope (_ScopeData)
-        self._stored_subproj_scopes = {} # map subproj path to loaded subproj scope
+        self._stored_subproj_scopes = {} # map subproj path to loaded subproj scope (_ScopeData)
         self._known_build_dirs = {} # map path to build dir defined for that path
         
         self._all_loaded_modules = {} # map absolute module path to module
@@ -970,48 +969,55 @@ class EMK_Base(object):
         self._run_do_later_funcs()
     
     def _load_parent_scope(self, path):
-        # First, load the emk_project.py file (if it exists)
-        proj_dir = _find_project_dir(path)
-        if proj_dir != self._current_proj_dir:
-            self._current_proj_dir = proj_dir
-            
-        if proj_dir in self._stored_proj_scopes:
-            self._local.current_scope = self._stored_proj_scopes[proj_dir]
-        else:
-            self._local.current_scope = _ScopeData(self._root_scope, "project", proj_dir, proj_dir)
-            
-            self.scope.prepare_do_later()
-            self.import_from([proj_dir], "emk_project")
-            self._run_module_post_functions()
-            self._run_do_later_funcs()
-            
-            self._stored_proj_scopes[proj_dir] = self.scope
-        
-        # Next, load any emk_subproj.py files between path and the project dir
+        proj_dir = None
         new_subproj_dirs = []
-        parent_scope = self._local.current_scope # project scope, initially
+        parent_scope = self._root_scope
         d = path
-        while True:
+        prev = None
+        while d != prev:
             if d in self._stored_subproj_scopes:
                 parent_scope = self._stored_subproj_scopes[d]
                 break
             if os.path.isfile(os.path.join(d, "emk_subproj.py")):
-                new_subproj_dirs.append(d)
-            if d == proj_dir:
+                new_subproj_dirs.append((d, True))
+            else:
+                new_subproj_dirs.append((d, False))
+            if os.path.isfile(os.path.join(d, "emk_project.py")):
+                proj_dir = d
                 break
+            prev = d
             d, tail = os.path.split(d)
         
-        new_subproj_dirs.reverse()
-        for d in new_subproj_dirs:
-            self._local.current_scope = parent_scope = _ScopeData(parent_scope, "subproj", d, proj_dir)
+        if proj_dir:
+            self._local.current_scope = _ScopeData(self._root_scope, "project", proj_dir, proj_dir)
             
-            self.scope.prepare_do_later()
-            self.import_from([d], "emk_subproj")
+            self._local.current_scope.prepare_do_later()
+            self.import_from([proj_dir], "emk_project")
             self._run_module_post_functions()
             self._run_do_later_funcs()
             
-            self._stored_subproj_scopes[d] = self.scope
+            parent_scope = self._local.current_scope
+        elif parent_scope is self._root_scope:
+            proj_dir = d
+        else:
+            proj_dir = parent_scope.proj_dir
+        
+        new_subproj_dirs.reverse()
+        for d, have_subproj in new_subproj_dirs:
+            if have_subproj:
+                self._local.current_scope = parent_scope = _ScopeData(parent_scope, "subproj", d, proj_dir)
+            
+                self.scope.prepare_do_later()
+                self.import_from([d], "emk_subproj")
+                self._run_module_post_functions()
+                self._run_do_later_funcs()
+            
+                self._stored_subproj_scopes[d] = self.scope
+            else:
+                self._stored_subproj_scopes[d] = parent_scope
+        
         self._local.current_scope = parent_scope
+        self._current_proj_dir = proj_dir
     
     def _get_mod_time(self, filepath, lock=True):
         if filepath is self.ALWAYS_BUILD:
