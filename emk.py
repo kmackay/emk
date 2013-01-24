@@ -256,9 +256,10 @@ class _ConsoleStyler(object):
         m = self.r.search(string, start)
         while m:
             bits.append(string[start:m.start(0)])
-            if m.group(1) in styles:
-                stack.append(styles[m.group(1)])
-                bits.append(styles[m.group(1)])
+            style = styles.get(m.group(1))
+            if style is not None:
+                stack.append(style)
+                bits.append(style)
             elif m.group(1) == '':
                 prevstyle = stack.pop()
                 if prevstyle:
@@ -293,7 +294,7 @@ class _Formatter(logging.Formatter):
         record.orig_levelname = record.levelname.lower()
         record.levelname = _style_tag('logtype') + record.levelname.lower() + _style_tag('')
             
-        if "adorn" in record.__dict__ and not record.__dict__["adorn"]:
+        if record.__dict__.get("adorn") is False:
             return self.styler.style(record.message, record)
         
         return self.styler.style(self.format_str % record.__dict__, record)
@@ -537,11 +538,13 @@ class EMK_Base(object):
         return None
     
     def _get_target(self, path, create_new=False):
-        if path in self._targets:
-            return self._targets[path]
-        elif path in self._fixed_aliases:
-            return self._fixed_aliases[path]
-        elif create_new:
+        t = self._targets.get(path)
+        if t is not None:
+            return t
+        t = self._fixed_aliases.get(path)
+        if t is not None:
+            return t
+        if create_new:
             self.log.debug("Creating artificial target for %s", path)
             target = _Target(path, None)
             self._targets[path] = target
@@ -591,10 +594,11 @@ class EMK_Base(object):
             unfixed = {}
             did_fix = False
             for alias, target in unfixed_aliases.items():
-                if target in self._targets:
+                t = self._targets.get(target)
+                if t is not None:
                     did_fix = True
-                    fixed_aliases[alias] = self._targets[target]
-                    self.log.debug("fixed alias %s => %s", alias, self._targets[target].abs_path)
+                    fixed_aliases[alias] = t
+                    self.log.debug("fixed alias %s => %s", alias, t.abs_path)
                 elif target in fixed_aliases:
                     did_fix = True
                     fixed_aliases[alias] = fixed_aliases[target]
@@ -642,7 +646,7 @@ class EMK_Base(object):
                         if not d._built:
                             self._must_build.append(d)
             else:
-                self.log.warning("Target %s was attached to, but not defined as a product of a rule", path)
+                self.log.info("Target %s was attached to, but not yet defined as a product of a rule", path)
 
     def _fix_requires(self, rule):
         if rule._built:
