@@ -12,11 +12,12 @@ import collections
 import errno
 import traceback
 import time
-import json
+import pickle
 import threading
 import shutil
 import multiprocessing
 import re
+import hashlib
 
 _module_path = os.path.realpath(__file__)
 
@@ -38,12 +39,10 @@ class _Target(object):
         self._built = False
         self._visited = False
         
-        self._cache = None
-        self._untouched = False
-        self._changed = None
+        self._changed = False
 
 class _Rule(object):
-    def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed, scope):
+    def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed_func, scope):
         self.produces = []
         self.requires = requires
         self.args = args
@@ -52,10 +51,16 @@ class _Rule(object):
         self.threadsafe = threadsafe
         self.ex_safe = ex_safe
         
+        self._key = None
+        self._cache = None
+        self._untouched = set()
+        
+        self._lock = threading.Lock()
+        
         self.secondary_deps = set()
         self.weak_deps = set()
         
-        self.has_changed = has_changed
+        self.has_changed_func = has_changed_func
         
         self._required_targets = []
         self._remaining_unbuilt_reqs = 0
@@ -64,7 +69,7 @@ class _Rule(object):
         self.stack = []
 
 class _RuleWrapper(object):
-    def __init__(self, func, stack=[], produces=[], requires=[], args=[], threadsafe=False, ex_safe=False, has_changed=None):
+    def __init__(self, func, stack=[], produces=[], requires=[], args=[], threadsafe=False, ex_safe=False, has_changed_func=None):
         self.func = func
         self.stack = stack
         self.produces = produces
@@ -72,7 +77,7 @@ class _RuleWrapper(object):
         self.args = args
         self.threadsafe = threadsafe
         self.ex_safe = ex_safe
-        self.has_changed = has_changed
+        self.has_changed_func = has_changed_func
 
     def __call__(self, produces, requires, args):
         return self.func(produces, requires, args)
@@ -84,7 +89,7 @@ class _ScopeData(object):
         self.dir = dir
         self.proj_dir = proj_dir
         
-        self.target_cache = {}
+        self._cache = {}
         self._do_later_funcs = []
         self._wrapped_rules = []
         
@@ -425,7 +430,7 @@ class EMK_Base(object):
         
         self._targets = {} # map absolute target name -> target
         self._rules = []
-        self._bad_rule = None
+        self._bad_rules = []
         
         self._visited_dirs = {}
         self._current_proj_dir = None
@@ -703,10 +708,9 @@ class EMK_Base(object):
             
         for path in weak_secondaries:
             target = self._get_target(path, create_new=True)
-
             if target.rule:
-                self.log.warning("Cannot have %s as a weak dependency because there is a rule to make it", target.abs_path)
-                target._required_by.add(rule) # when the target is built, we need to know which rules to examine for further building
+                self.log.info("Not treating %s as a weak dependency, because there is a rule to make it", target.abs_path)
+                target._required_by.add(rule)
                 required_targets.append((target, False))
             else:
                 required_targets.append((target, True))
@@ -734,6 +738,15 @@ class EMK_Base(object):
             t = self._targets.get(path)
             if t:
                 t._rebuild_if_changed = True
+        
+    def _setup_rule_cache(self, rule):
+        paths = [t.abs_path for t in rule.produces]
+        paths.sort()
+        rule._key = key = hashlib.md5('\0'.join(paths)).hexdigest()
+        cache = rule.scope._cache.get(key)
+        if cache is None:
+            rule.scope._cache[key] = cache = {}
+        rule._cache = cache
     
     def _toplevel_examine_target(self, target):
         if not target in self._toplevel_examined_targets:
@@ -750,14 +763,6 @@ class EMK_Base(object):
             t = self._get_target(path)
             if t:
                 self._examine_target(t, False)
-        
-        if target.rule:
-            rule = target.rule
-            for t in rule.produces:
-                cache = rule.scope.target_cache.get(t.abs_path)
-                if not cache:
-                    rule.scope.target_cache[t.abs_path] = cache = {}
-                t._cache = cache
 
         if not target.rule:
             if target.abs_path is self.ALWAYS_BUILD:
@@ -769,57 +774,62 @@ class EMK_Base(object):
                 if os.path.exists(target.abs_path):
                     target._built = True
                     target._check_if_changed = True
-                elif not weak:
+                elif weak:
+                    self.log.debug("Allowing weak dependency %s to not exist", target.abs_path)
+                else:
                     self._need_undefined_rule = True
-        elif not target.rule._want_build:
-            target.rule._want_build = True
-            target.rule._remaining_unbuilt_reqs = 0
-            for req, weak_req in target.rule._required_targets:
-                self._examine_target(req, weak_req)
-                if (not weak_req) and (not req._built): # we can't build this rule immediately
-                    target.rule._remaining_unbuilt_reqs += 1
+        else:
+            rule = target.rule
+            if rule._key is None:
+                self._setup_rule_cache(rule)
+            if not rule._want_build:
+                rule._want_build = True
+                rule._remaining_unbuilt_reqs = 0
+                for req, is_weak in rule._required_targets:
+                    self._examine_target(req, is_weak)
+                    if (not is_weak) and (not req._built): # we can't build this rule immediately
+                        rule._remaining_unbuilt_reqs += 1
 
-            if not target.rule._remaining_unbuilt_reqs:
-                # can build this rule immediately
-                self._buildable_rules.put(target.rule)
+                if not rule._remaining_unbuilt_reqs:
+                    # can build this rule immediately
+                    self._buildable_rules.put(rule)
 
     def _done_rule(self, rule, built):
-        with self._lock:
-            now = time.time()
-            for t in rule.produces:
+        for t in rule.produces:
+            if built:
                 abs_path = t.abs_path
-                
-                if built:
-                    if t._cache.get("exists", False):
-                        t._cache.pop("file_modtime", None)
-                    else:
-                        try:
-                            t._cache["file_modtime"] = os.path.getmtime(abs_path)
-                        except OSError:
-                            rulestack = ["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack]
-                            raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
-                            
-                    t._changed = (not t._untouched)
+                cache = rule._cache[abs_path]
+                if cache.get("exists", False):
+                    cache.pop("file_modtime", None)
                 else:
-                    t._changed = None
-                
-                t._built = True
+                    try:
+                        cache["file_modtime"] = os.path.getmtime(abs_path)
+                    except OSError:
+                        rulestack = ["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack]
+                        with self._lock:
+                            del rule.scope._cache[rule._key]
+                        raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
+                        
+                t._changed = (t.abs_path not in rule._untouched)
+            else:
+                t._changed = None
+            t._built = True
 
-            for t in rule.produces:
-                for r in t._required_by:
-                    if not r._want_build:
-                        continue
-                    
+        for t in rule.produces:
+            for r in t._required_by:
+                if not r._want_build:
+                    continue
+                with r._lock:
                     r._remaining_unbuilt_reqs -= 1
                     if r._remaining_unbuilt_reqs == 0:
                         self._buildable_rules.put(r)
     
-    def _set_bad_rule(self, rule):
+    def _add_bad_rule(self, rule):
         if not rule.ex_safe:
             with self._lock:
-                self._bad_rule = rule
+                self._bad_rules.append(rule)
     
-    def has_changed(self, abs_path, cache, weak=False):
+    def has_changed_func(self, abs_path, cache, weak=False):
         if abs_path is self.ALWAYS_BUILD:
             return True
         
@@ -844,35 +854,23 @@ class EMK_Base(object):
     def _get_changed_reqs(self, rule):
         changed_reqs = []
         for req, weak in rule._required_targets:
-            if req.abs_path is self.ALWAYS_BUILD:
-                pass
-            elif req._check_if_changed:
-                # need to check if the req has changed, even if it is produced by a rule
-                with self._lock:
-                    if req.rule:
-                        # produced by a rule, so use the rule's check function and cache to determine if the req has changed
-                        if req._changed is None:
-                            req._changed = req.rule.has_changed(req.abs_path, req._cache)
-                    else:
-                        # no rule; use this rule's check function and scope to determine if the req has changed
-                        if req._changed is None:
-                            cache = rule.scope.target_cache.get(req.abs_path)
-                            if not cache:
-                                cache = {}
-                            changed = rule.has_changed(req.abs_path, cache, weak)
-                            if weak:
-                                if changed:
-                                    changed_reqs.append(req.abs_path)
-                            else:
-                                req._changed = changed
-                                req._cache = cache
-                            rule.scope.target_cache[req.abs_path] = cache
-                        else:
-                            rule.scope.target_cache[req.abs_path] = req._cache
-
             if req._changed:
                 changed_reqs.append(req.abs_path)
+            elif req._check_if_changed:
+                tcache = rule._cache[req.abs_path]
+                if rule.has_changed_func(req.abs_path, tcache):
+                    changed_reqs.append(req.abs_path)
         return changed_reqs
+    
+    def _fixup_rule_cache(self, rule):
+        path_set = set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])
+        cache = rule._cache
+        remove = [k for k in cache if k not in path_set]
+        for k in remove:
+            del cache[k]
+        for p in path_set:
+            if p not in cache:
+                cache[p] = {}
     
     def _build_thread_func(self, special):
         self._local.current_rule = None
@@ -880,6 +878,8 @@ class EMK_Base(object):
             rule = self._buildable_rules.get(special)
             if rule is self._buildable_rules.STOP:
                 return
+            
+            self._fixup_rule_cache(rule)
             
             try:
                 rule._built = True
@@ -891,10 +891,11 @@ class EMK_Base(object):
                     self.log.debug("Need to build %s because dependencies %s have changed", [t.abs_path for t in rule.produces], changed_reqs)
                 else:
                     for t in rule.produces:
-                        if not t._cache.get("exists") and not os.path.exists(t.abs_path):
+                        tcache = rule._cache[t.abs_path]
+                        if not tcache.get("exists") and not os.path.exists(t.abs_path):
                             self.log.debug("Need to build %s because it does not exist", t.abs_path)
                             need_build = True
-                        elif t._rebuild_if_changed and rule.has_changed(t.abs_path, t._cache):
+                        elif t._rebuild_if_changed and rule.has_changed_func(t.abs_path, tcache):
                             self.log.debug("Need to build %s because it has changed", t.abs_path)
                             need_build = True
 
@@ -912,18 +913,18 @@ class EMK_Base(object):
 
                 self._done_rule(rule, need_build)
             except _BuildError as e:
-                self._set_bad_rule(rule)
+                self._add_bad_rule(rule)
                 self._buildable_rules.error(e)
                 return
             except Exception as e:
-                self._set_bad_rule(rule)
+                self._add_bad_rule(rule)
                 lines = ["    %s" % (line) for line in _get_exception_info()]
                 lines.append("Rule definition:")
                 lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
                 self._buildable_rules.error(_BuildError("Error running rule", lines))
                 return
             except:
-                self._set_bad_rule(rule)
+                self._add_bad_rule(rule)
                 raise
             
             self._buildable_rules.done_task()
@@ -1018,7 +1019,7 @@ class EMK_Base(object):
             raise _BuildError("Error running do_later function (in %s)" % (self.scope.dir), _get_exception_info())
         
         for wrapper in self.scope._wrapped_rules:
-            self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.ex_safe, wrapper.has_changed, wrapper.stack)
+            self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.ex_safe, wrapper.has_changed_func, wrapper.stack)
     
     def _have_unbuilt(self):
         for target in self._toplevel_examined_targets:
@@ -1129,23 +1130,23 @@ class EMK_Base(object):
         self._local.current_scope = parent_scope
         self._current_proj_dir = proj_dir
     
-    def _load_target_cache(self):
-        self.scope.target_cache = {}
+    def _load_scope_cache(self):
+        self.scope._cache = {}
         try:
-            with open(os.path.join(self.scope.build_dir, "__emk_cache__")) as f:
-                self.scope.target_cache = json.load(f)
+            with open(os.path.join(self.scope.build_dir, "__emk_cache__"), "rb") as f:
+                self.scope._cache = pickle.load(f)
         except IOError:
             pass
     
-    def _write_target_caches(self):
+    def _write_scope_caches(self):
         if self.cleaning:
             return
         for path, scope in self._visited_dirs.items():
-            if scope.target_cache:
-                cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
+            cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
+            if scope._cache:
                 try:
-                    with open(cache_path, "w") as f:
-                        json.dump(scope.target_cache,f)
+                    with open(cache_path, "wb") as f:
+                        pickle.dump(scope._cache,f)
                 except IOError:
                     self.log.error("Failed to open cache file %s", cache_path)
                 except:
@@ -1154,6 +1155,11 @@ class EMK_Base(object):
                     except OSError:
                         pass
                     raise
+            else:
+                try:
+                    os.remove(cache_path)
+                except OSError:
+                    pass
     
     def _handle_dir(self, d, first_dir=False):
         path = os.path.realpath(d)
@@ -1189,7 +1195,7 @@ class EMK_Base(object):
         
         if not self._cleaning:
             _mkdirs(self.scope.build_dir)
-        self._load_target_cache()
+        self._load_scope_cache()
         if first_dir:
             self._fix_explicit_targets()
         
@@ -1274,7 +1280,7 @@ class EMK_Base(object):
         self.log.info("Module %s not found", name)
         return None
     
-    def _rule(self, produces, requires, args, func, threadsafe, ex_safe, has_changed, stack):
+    def _rule(self, produces, requires, args, func, threadsafe, ex_safe, has_changed_func, stack):
         if self.scope_name != "rules":
             self.log.warning("Cannot create rules when not in 'rules' scope (current scope = '%s')", self.scope_name)
             return
@@ -1286,10 +1292,10 @@ class EMK_Base(object):
                 fixed_produces.append(p)
         fixed_requires = [_make_require_abspath(r, self.scope) for r in requires if r != ""]
         
-        if not has_changed:
-            has_changed = self.has_changed
+        if not has_changed_func:
+            has_changed_func = self.has_changed_func
 
-        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, has_changed, self.scope)
+        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, has_changed_func, self.scope)
         new_rule.stack = stack
         with self._lock:
             self._rules.append(new_rule)
@@ -1308,11 +1314,13 @@ class EMK_Base(object):
                     new_rule.produces.append(new_target)
                     self._added_rule = True
     
-    def _print_bad_rule(self):
-        if self._bad_rule:
-            lines = [_style_tag('u') + "A rule may have been partially executed." + _style_tag('')]
-            lines.append("Rule definition:")
-            lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in self._bad_rule.stack])
+    def _print_bad_rules(self):
+        if self._bad_rules:
+            lines = []
+            for rule in self._bad_rules:
+                lines = [_style_tag('u') + "A rule may have been partially executed." + _style_tag('')]
+                lines.append("Rule definition:")
+                lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
             lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
             self.error_print('\n'.join(lines))
 
@@ -1416,7 +1424,7 @@ class EMK(EMK_Base):
                         for d in recurse_dirs:
                             self._handle_dir(d)
         finally:
-            self._write_target_caches()
+            self._write_scope_caches()
         
         unbuilt = set()
         for path, target in self._targets.items():
@@ -1478,9 +1486,9 @@ class EMK(EMK_Base):
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
-    def rule(self, produces, requires, func, args=[], threadsafe=False, ex_safe=False, has_changed=None):
+    def rule(self, produces, requires, func, args=[], threadsafe=False, ex_safe=False, has_changed_func=None):
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-        self._rule(produces, requires, args, func, threadsafe, ex_safe, has_changed, stack)
+        self._rule(produces, requires, args, func, threadsafe, ex_safe, has_changed_func, stack)
     
     # decorator for simple rule creation
     def produces(self, *targets):
@@ -1606,24 +1614,30 @@ class EMK(EMK_Base):
             self._postbuild_funcs.append((self.scope, func))
     
     def mark_exists(self, *paths):
-        with self._lock:
-            for path in paths:
-                abs_path = _make_target_abspath(path, self.scope)
+        if not self.current_rule:
+            self.log.warning("Cannot mark anything as existing when not in a rule")
+            return
+        
+        cache = self.current_rule._cache
+        for path in paths:
+            abs_path = _make_target_abspath(path, self.scope)
+            tcache = cache.get(abs_path)
+            if tcache is not None:
                 self.log.debug("Marking %s as existing", abs_path)
-                cache = self.scope.target_cache.get(abs_path)
-                if cache is not None:
-                    cache["exists"] = True
+                tcache["exists"] = True
+            else:
+                self.log.warning("Cannot mark %s as existing since it is not a product of the current rule", abs_path)
     
     def mark_untouched(self, *paths):
-        with self._lock:
-            for path in paths:
-                abs_path = _make_target_abspath(path, self.scope)
-                t = self._targets.get(abs_path)
-                if t:
-                    self.log.debug("Marking %s as untouched", abs_path)
-                    t._untouched = True
-                else:
-                    self.log.warning("Not marking %s as untouched since it is not a target", abs_path)
+        if not self.current_rule:
+            self.log.warning("Cannot mark anything as untouched when not in a rule")
+            return
+            
+        untouched_set = self.current_rule._untouched
+        for path in paths:
+            abs_path = _make_target_abspath(path, self.scope)
+            self.log.debug("Marking %s as untouched", abs_path)
+            untouched_set.add(abs_path)
     
     def log_print(self, format, *args):
         d = {'adorn':False}
@@ -1652,9 +1666,9 @@ class EMK(EMK_Base):
         return _format_stack(_filter_stack(stack))
     
     def cached_data(self, path):
-        with self._lock:
-            abs_path = _make_target_abspath(path, self.scope)
-            return self.scope.target_cache.get(abs_path)
+        if self.current_rule:
+            return self.current_rule._cache.get[_make_target_abspath(path, self.scope)]
+        return None
 
 def setup(argv=[]):
     emk = EMK(argv)
@@ -1667,12 +1681,12 @@ def main(args):
         return 0
     except KeyboardInterrupt:
         emk.error_print("\nemk: Interrupted")
-        emk._print_bad_rule()
+        emk._print_bad_rules()
         return 1
     except _BuildError as e:
         lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
         if e.extra_info:
             lines.extend(["    " + line.replace('\n', "\n    ") for line in e.extra_info])
         emk.error_print('\n'.join(lines))
-        emk._print_bad_rule()
+        emk._print_bad_rules()
         return 1
