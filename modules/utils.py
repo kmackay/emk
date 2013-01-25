@@ -77,6 +77,7 @@ class Module(object):
         print_stderr = "nonzero"
         exit_on_nonzero_return = True
         cwd = None
+        env = None
 
         if "print_call" in kwargs and not kwargs["print_call"]:
             print_call = False
@@ -88,8 +89,10 @@ class Module(object):
             exit_on_nonzero_return = False
         if "cwd" in kwargs:
             cwd = kwargs["cwd"]
+        if "env" in kwargs:
+            env = kwargs["env"]
 
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
         proc_stdout, proc_stderr = proc.communicate()
         strings = []
         if print_call:
