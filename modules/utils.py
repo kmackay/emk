@@ -5,6 +5,7 @@ import traceback
 import shutil
 import logging
 import glob
+import filecmp
 
 log = logging.getLogger("emk.utils")
 
@@ -117,12 +118,17 @@ class Module(object):
         emk.mark_exists(*produces)
     
     def copy_rule(self, source, dest):
-        emk.rule([dest], [source], self.copy_file, threadsafe=True, ex_safe=True)
+        emk.rule([dest], [source, emk.ALWAYS_BUILD], self.copy_file, threadsafe=True, ex_safe=True)
     
     def copy_file(self, produces, requires, args):
         dest = produces[0]
         src = requires[0]
+        
         try:
+            if(os.path.isfile(dest) and filecmp.cmp(dest, src, shallow=False)):
+                emk.mark_untouched(*produces)
+                return
+                
             emk.log.info("Copying %s to %s" % (src, dest))
             destdir = os.path.dirname(dest)
             self.mkdirs(destdir)
