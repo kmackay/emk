@@ -500,7 +500,7 @@ class EMK_Base(object):
                         dev_stacks = True
                     elif key == "threads":
                         if val == "x":
-                            val = multiprocessing.cpu_count()
+                            val = multiprocessing.cpu_count() * 2
                         else:
                             try:
                                 val = int(val, base=0)
