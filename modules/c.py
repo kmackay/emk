@@ -206,13 +206,12 @@ class Module(object):
         extra_deps = None
         if self.compiler:
             extra_deps = self.compiler.load_extra_dependencies(emk.abspath(dest + ".dep"))
-        if not extra_deps is None:
-            requires.extend(extra_deps)
-            emk.allow_nonexistent(*extra_deps)
-        else:
+        if extra_deps is None:
             requires.append(emk.ALWAYS_BUILD)
         
         emk.rule([dest], requires, self.do_compile, args=args, threadsafe=True, ex_safe=True)
+        if extra_deps:
+            emk.weak_depend(dest, *extra_deps)
     
     def do_compile(self, produces, requires, args):
         if not self.compiler:

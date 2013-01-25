@@ -41,7 +41,6 @@ class _Target(object):
         self._cache = None
         self._untouched = False
         self._changed = None
-        self._nonexistent = False
 
 class _Rule(object):
     def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed, scope):
@@ -54,6 +53,7 @@ class _Rule(object):
         self.ex_safe = ex_safe
         
         self.secondary_deps = set()
+        self.weak_deps = set()
         
         self.has_changed = has_changed
         
@@ -347,7 +347,11 @@ def _get_exception_info():
     lines.extend(_format_stack(_filter_stack(stack)))
     return lines
 
+dev_stacks = False
 def _filter_stack(stack):
+    if dev_stacks:
+        return stack
+        
     new_stack = []
     entered_emk = False
     left_emk = False
@@ -434,7 +438,7 @@ class EMK_Base(object):
         self._aliases = {}
         self._attached_dependencies = {}
         self._secondary_dependencies = {}
-        self._allowed_nonexistent = set()
+        self._weak_dependencies = {}
         self._requires_rule = set()
         self._check_if_changed = set()
         self._rebuild_if_changed = set()
@@ -455,7 +459,7 @@ class EMK_Base(object):
         self._lock = threading.Lock()
         
         # parse args
-        log_levels = {"debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
+        log_levels = {"dev":logging.DEBUG, "debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
         
         self._options = {}
         
@@ -485,6 +489,8 @@ class EMK_Base(object):
                             self.log.setLevel(log_levels[level])
                         else:
                             self.log.error("Unknown log level '%s'", level)
+                        if level == "dev":
+                            dev_stacks = True
                     elif key == "threads":
                         if val == "x":
                             val = multiprocessing.cpu_count()
@@ -640,6 +646,24 @@ class EMK_Base(object):
                 leftovers[path] = depends
         
         self._secondary_dependencies = leftovers
+    
+    def _fix_weak_depends(self):
+        leftovers = {}
+        for path, depends in self._weak_dependencies.items():
+            target = self._get_target(path)
+            if target:
+                if target._built:
+                    self.log.info("Cannot add weak dependencies to '%s' since it has already been built" % (target.abs_path))
+                    continue
+                
+                new_deps = set(self._resolve_build_dirs(depends))
+                
+                target.rule.weak_deps |= new_deps
+            else:
+                self.log.debug("Target %s had weak dependencies, but there is no rule for it yet", path)
+                leftovers[path] = depends
+        
+        self._weak_dependencies = leftovers
 
     def _fix_attached(self):
         for path, attached in self._attached_dependencies.items():
@@ -664,6 +688,8 @@ class EMK_Base(object):
         
         secondaries = set(self._resolve_build_dirs(rule.secondary_deps))
         updated_paths = secondaries.union(set(rule.requires))
+        
+        weak_secondaries = set(self._resolve_build_dirs(rule.weak_deps)) - updated_paths
 
         # convert paths to actual targets
         required_targets = []   
@@ -671,7 +697,17 @@ class EMK_Base(object):
             target = self._get_target(path, create_new=True)
 
             target._required_by.add(rule) # when the target is built, we need to know which rules to examine for further building
-            required_targets.append(target)
+            required_targets.append((target, False))
+            
+        for path in weak_secondaries:
+            target = self._get_target(path, create_new=True)
+
+            if target.rule:
+                self.log.warning("Cannot have %s as a weak dependency because there is a rule to make it", target.abs_path)
+                target._required_by.add(rule) # when the target is built, we need to know which rules to examine for further building
+                required_targets.append((target, False))
+            else:
+                required_targets.append((target, True))
 
         rule._required_targets = required_targets
 
@@ -680,9 +716,6 @@ class EMK_Base(object):
         for path in self._auto_targets:
             self._fixed_auto_targets.append(self._get_target(path, create_new=True))
         self._auto_targets.clear() # don't need these anymore since they will be built from the fixed list if necessary
-    
-    def _fix_allowed_nonexistent(self):
-        self._allowed_nonexistent = set(self._resolve_build_dirs(self._allowed_nonexistent, ignore_errors=True))
     
     def _fix_requires_rule(self):
         self._requires_rule = set(self._resolve_build_dirs(self._requires_rule))
@@ -703,9 +736,9 @@ class EMK_Base(object):
     def _toplevel_examine_target(self, target):
         if not target in self._toplevel_examined_targets:
             self._toplevel_examined_targets.add(target)
-            self._examine_target(target)
+            self._examine_target(target, False)
 
-    def _examine_target(self, target):
+    def _examine_target(self, target, weak):
         if target._visited or target._built:
             return
         target._visited = True
@@ -714,7 +747,7 @@ class EMK_Base(object):
         for path in target.attached_deps:
             t = self._get_target(path)
             if t:
-                self._examine_target(t)
+                self._examine_target(t, False)
         
         if target.rule:
             rule = target.rule
@@ -734,19 +767,14 @@ class EMK_Base(object):
                 if os.path.exists(target.abs_path):
                     target._built = True
                     target._check_if_changed = True
-                elif target.abs_path in self._allowed_nonexistent:
-                    self.log.debug("Allowing nonexistent %s", target.abs_path)
-                    target._nonexistent = True
-                    target._changed = False
-                    target._built = True
-                else:
+                elif not weak:
                     self._need_undefined_rule = True
         elif not target.rule._want_build:
             target.rule._want_build = True
             target.rule._remaining_unbuilt_reqs = 0
-            for req in target.rule._required_targets:
-                self._examine_target(req)
-                if not req._built: # we can't build this rule immediately
+            for req, weak_req in target.rule._required_targets:
+                self._examine_target(req, weak_req)
+                if (not weak_req) and (not req._built): # we can't build this rule immediately
                     target.rule._remaining_unbuilt_reqs += 1
 
             if not target.rule._remaining_unbuilt_reqs:
@@ -789,7 +817,7 @@ class EMK_Base(object):
             with self._lock:
                 self._bad_rule = rule
     
-    def has_changed(self, abs_path, cache):
+    def has_changed(self, abs_path, cache, weak=False):
         if abs_path is self.ALWAYS_BUILD:
             return True
         
@@ -802,6 +830,8 @@ class EMK_Base(object):
             if cached_modtime != modtime:
                 self.log.debug("Modtime for %s has changed; cached = %s, new = %s", abs_path, cached_modtime, modtime)
                 cache["file_modtime"] = modtime
+                if weak and cached_modtime is None:
+                    return False
                 return True
             else:
                 self.log.debug("Modtime for %s has not changed (%s)", abs_path, cached_modtime)
@@ -811,13 +841,9 @@ class EMK_Base(object):
     
     def _get_changed_reqs(self, rule):
         changed_reqs = []
-        for req in rule._required_targets:
+        for req, weak in rule._required_targets:
             if req.abs_path is self.ALWAYS_BUILD:
                 pass
-            elif req._nonexistent:
-                with self._lock:
-                    # remove nonexistent reqs from the cache
-                    rule.scope.target_cache.pop(req.abs_path, None)
             elif req._check_if_changed:
                 # need to check if the req has changed, even if it is produced by a rule
                 with self._lock:
@@ -831,11 +857,16 @@ class EMK_Base(object):
                             cache = rule.scope.target_cache.get(req.abs_path)
                             if not cache:
                                 cache = {}
-                            req._changed = rule.has_changed(req.abs_path, cache)
-                            req._cache = cache
-                            
-                        # since there was no rule, we store the cache in every scope that depends on this req
-                        rule.scope.target_cache[req.abs_path] = req._cache
+                            changed = rule.has_changed(req.abs_path, cache, weak)
+                            if weak:
+                                if changed:
+                                    changed_reqs.append(req.abs_path)
+                            else:
+                                req._changed = changed
+                                req._cache = cache
+                            rule.scope.target_cache[req.abs_path] = cache
+                        else:
+                            rule.scope.target_cache[req.abs_path] = req._cache
 
             if req._changed:
                 changed_reqs.append(req.abs_path)
@@ -916,7 +947,7 @@ class EMK_Base(object):
         # revisit all targets that we want to build that were not built previously
         for target in self._toplevel_examined_targets:
             if not target._built:
-                self._examine_target(target)
+                self._examine_target(target, False)
 
         for target in self._must_build:
             self._toplevel_examine_target(target)
@@ -1354,6 +1385,7 @@ class EMK(EMK_Base):
                 self._remove_artificial_targets()
                 self._fix_aliases()
                 self._fix_depends()
+                self._fix_weak_depends()
             
                 # fix up requires (set up absolute paths, and map to targets)
                 for rule in self._rules:
@@ -1361,7 +1393,6 @@ class EMK(EMK_Base):
             
                 self._fix_attached()
                 self._fix_auto_targets()
-                self._fix_allowed_nonexistent()
                 self._fix_requires_rule()
                 self._fix_check_if_changed()
                 self._fix_rebuild_if_changed()
@@ -1394,8 +1425,8 @@ class EMK(EMK_Base):
         for target in unbuilt:
             if target.rule:
                 unbuilt_deps = []
-                for dep in target.rule._required_targets:
-                    if dep in unbuilt:
+                for dep, weak in target.rule._required_targets:
+                    if (not weak) and (dep in unbuilt):
                         unbuilt_deps.append(dep.abs_path)
                 unbuilt_lines.append("%s depends on unbuilt %s" % (target.abs_path, unbuilt_deps))
             else:
@@ -1488,6 +1519,19 @@ class EMK(EMK_Base):
             else:
                 self._secondary_dependencies[abspath] = list(fixed_depends)
     
+    def weak_depend(self, target, *dependencies):
+        fixed_depends = [_make_require_abspath(d, self.scope) for d in dependencies if d != ""]
+        if not fixed_depends:
+            return
+
+        abspath = _make_target_abspath(target, self.scope)
+        self.log.debug("Adding %s as weak dependencies of target %s", fixed_depends, abspath)
+        with self._lock:
+            if abspath in self._weak_dependencies:
+                self._weak_dependencies[abspath].extend(fixed_depends)
+            else:
+                self._weak_dependencies[abspath] = list(fixed_depends)
+    
     def attach(self, target, *attached_targets):
         fixed_depends = [_make_require_abspath(d, self.scope) for d in attached_targets if d != ""]
         abspath = _make_target_abspath(target, self.scope)
@@ -1515,13 +1559,6 @@ class EMK(EMK_Base):
             self.log.debug("Adding alias %s for %s", abs_alias, abs_target)
             self._aliases[abs_alias] = abs_target
             self._added_rule = True
-    
-    def allow_nonexistent(self, *paths):
-        with self._lock:
-            for path in paths:
-                abs_path = _make_require_abspath(path, self.scope)
-                self.log.debug("Allowing %s to not exist", abs_path)
-                self._allowed_nonexistent.add(abs_path)
     
     def require_rule(self, *paths):
         with self._lock:
