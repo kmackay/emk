@@ -402,6 +402,8 @@ def _make_require_abspath(rel_path, scope):
 
 class EMK_Base(object):
     def __init__(self, args):
+        global dev_stacks
+        
         self.log = logging.getLogger("emk")
         handler = logging.StreamHandler(sys.stdout)
         formatter = _Formatter("%(name)s (%(levelname)s): %(message)s")
@@ -459,7 +461,7 @@ class EMK_Base(object):
         self._lock = threading.Lock()
         
         # parse args
-        log_levels = {"dev":logging.DEBUG, "debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
+        log_levels = {"debug":logging.DEBUG, "info":logging.INFO, "warning":logging.WARNING, "error":logging.ERROR, "critical":logging.CRITICAL}
         
         self._options = {}
         
@@ -489,8 +491,9 @@ class EMK_Base(object):
                             self.log.setLevel(log_levels[level])
                         else:
                             self.log.error("Unknown log level '%s'", level)
-                        if level == "dev":
-                            dev_stacks = True
+                    elif key == "emk_dev" and val == "yes":
+                        print("dev stacks")
+                        dev_stacks = True
                     elif key == "threads":
                         if val == "x":
                             val = multiprocessing.cpu_count()
