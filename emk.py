@@ -717,10 +717,12 @@ class EMK_Base(object):
                 self._examine_target(t)
         
         if target.rule:
-            cache = target.rule.scope.target_cache.get(target.abs_path)
-            if not cache:
-                target.rule.scope.target_cache[target.abs_path] = cache = {}
-            target._cache = cache
+            rule = target.rule
+            for t in rule.produces:
+                cache = rule.scope.target_cache.get(t.abs_path)
+                if not cache:
+                    rule.scope.target_cache[t.abs_path] = cache = {}
+                t._cache = cache
 
         if not target.rule:
             if target.abs_path is self.ALWAYS_BUILD:
