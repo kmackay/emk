@@ -492,7 +492,6 @@ class EMK_Base(object):
                         else:
                             self.log.error("Unknown log level '%s'", level)
                     elif key == "emk_dev" and val == "yes":
-                        print("dev stacks")
                         dev_stacks = True
                     elif key == "threads":
                         if val == "x":
