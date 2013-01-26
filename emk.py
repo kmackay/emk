@@ -12,7 +12,7 @@ import collections
 import errno
 import traceback
 import time
-import pickle
+import cPickle as pickle
 import threading
 import shutil
 import multiprocessing
@@ -499,9 +499,7 @@ class EMK_Base(object):
                     elif key == "emk_dev" and val == "yes":
                         dev_stacks = True
                     elif key == "threads":
-                        if val == "x":
-                            val = multiprocessing.cpu_count() * 2
-                        else:
+                        if val != "x":
                             try:
                                 val = int(val, base=0)
                                 if val < 1:
@@ -509,7 +507,7 @@ class EMK_Base(object):
                             except ValueError:
                                 self.log.error("Thread count '%s' cannot be converted to an integer", val)
                                 val = 1
-                        self._build_threads = val
+                            self._build_threads = val
                     elif key == "colors":
                         if val not in stylers:
                             self.log.error("Unknown color style option '%s'", level)
@@ -840,7 +838,7 @@ class EMK_Base(object):
             modtime = os.path.getmtime(abs_path)
             cached_modtime = cache.get("file_modtime")
             if cached_modtime != modtime:
-                self.log.debug("Modtime for %s has changed; cached = %s, new = %s", abs_path, cached_modtime, modtime)
+                self.log.debug("Modtime for %s has changed; cached = %s, new = %s, weak = %s", abs_path, cached_modtime, modtime, weak)
                 cache["file_modtime"] = modtime
                 if weak and cached_modtime is None:
                     return False
@@ -857,18 +855,22 @@ class EMK_Base(object):
             if req._changed:
                 changed_reqs.append(req.abs_path)
             elif req._check_if_changed:
-                tcache = rule._cache[req.abs_path]
-                if rule.has_changed_func(req.abs_path, tcache):
+                rcache = rule._cache.get(req.abs_path)
+                if rcache is None:
+                    rule._cache[req.abs_path] = rcache = {}
+                if rule.has_changed_func(req.abs_path, rcache, weak):
                     changed_reqs.append(req.abs_path)
         return changed_reqs
     
     def _fixup_rule_cache(self, rule):
-        path_set = set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])
+        rule._target_paths = set([t.abs_path for t in rule.produces])
+        path_set = rule._target_paths | set([r.abs_path for r, w in rule._required_targets])
         cache = rule._cache
         remove = [k for k in cache if k not in path_set]
         for k in remove:
             del cache[k]
-        for p in path_set:
+        
+        for p in rule._target_paths:
             if p not in cache:
                 cache[p] = {}
     
@@ -1146,7 +1148,7 @@ class EMK_Base(object):
             if scope._cache:
                 try:
                     with open(cache_path, "wb") as f:
-                        pickle.dump(scope._cache,f)
+                        pickle.dump(scope._cache, f, -1)
                 except IOError:
                     self.log.error("Failed to open cache file %s", cache_path)
                 except:
@@ -1614,19 +1616,17 @@ class EMK(EMK_Base):
             self._postbuild_funcs.append((self.scope, func))
     
     def mark_exists(self, *paths):
-        if not self.current_rule:
+        rule = self.current_rule
+        if not rule:
             self.log.warning("Cannot mark anything as existing when not in a rule")
             return
         
-        cache = self.current_rule._cache
-        for path in paths:
-            abs_path = _make_target_abspath(path, self.scope)
-            tcache = cache.get(abs_path)
-            if tcache is not None:
-                self.log.debug("Marking %s as existing", abs_path)
-                tcache["exists"] = True
-            else:
-                self.log.warning("Cannot mark %s as existing since it is not a product of the current rule", abs_path)
+        abs_paths = set([_make_target_abspath(path, self.scope) for path in paths]) & rule._target_paths
+        cache = rule._cache
+        for path in abs_paths:
+            tcache = cache[path]
+            self.log.debug("Marking %s as existing", path)
+            tcache["exists"] = True
     
     def mark_untouched(self, *paths):
         if not self.current_rule:
@@ -1667,7 +1667,7 @@ class EMK(EMK_Base):
     
     def cached_data(self, path):
         if self.current_rule:
-            return self.current_rule._cache.get[_make_target_abspath(path, self.scope)]
+            return self.current_rule._cache.get(_make_target_abspath(path, self.scope))
         return None
 
 def setup(argv=[]):
