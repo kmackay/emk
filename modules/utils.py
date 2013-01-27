@@ -114,11 +114,11 @@ class Module(object):
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
-    def mark_exists_rule(self, produces, requires):
-        emk.rule(produces, requires, self.mark_exists, threadsafe=True, ex_safe=True)
+    def mark_virtual_rule(self, produces, requires):
+        emk.rule(produces, requires, self.mark_virtual, threadsafe=True, ex_safe=True)
         
-    def mark_exists(self, produces, requires, args):
-        emk.mark_exists(*produces)
+    def mark_virtual(self, produces, requires, args):
+        emk.mark_virtual(*produces)
     
     def copy_rule(self, source, dest):
         emk.rule([dest], [source, emk.ALWAYS_BUILD], self.copy_file, threadsafe=True, ex_safe=True)
@@ -151,4 +151,4 @@ class Module(object):
         for pattern in patterns:
             for f in glob.glob(pattern):
                 self.rm(f, print_msg=True)
-        emk.mark_exists(*produces)
+        emk.mark_virtual(*produces)

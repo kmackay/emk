@@ -32,13 +32,13 @@ class _Target(object):
             
         self.attached_deps = set()
         
-        self._check_if_changed = False
         self._rebuild_if_changed = False
         
         self._required_by = set()
         self._built = False
         self._visited = False
         
+        self._virtual_modtime = None
         self._changed = False
 
 class _Rule(object):
@@ -217,7 +217,7 @@ class _Clean_Module(object):
                 shutil.rmtree(build_dir, ignore_errors=True)
         else:
             _clean_log.info("Not removing directory %s", build_dir)
-        emk.mark_exists(*produces)
+        emk.mark_virtual(*produces)
     
     def post_rules(self):
         emk.rule(["clean"], [emk.ALWAYS_BUILD], self.clean_func, threadsafe=True, ex_safe=True)
@@ -352,9 +352,9 @@ def _get_exception_info():
     lines.extend(_format_stack(_filter_stack(stack)))
     return lines
 
-dev_stacks = False
+emk_dev = False
 def _filter_stack(stack):
-    if dev_stacks:
+    if emk_dev:
         return stack
         
     new_stack = []
@@ -407,7 +407,7 @@ def _make_require_abspath(rel_path, scope):
 
 class EMK_Base(object):
     def __init__(self, args):
-        global dev_stacks
+        global emk_dev
         
         self.log = logging.getLogger("emk")
         handler = logging.StreamHandler(sys.stdout)
@@ -447,7 +447,6 @@ class EMK_Base(object):
         self._secondary_dependencies = {}
         self._weak_dependencies = {}
         self._requires_rule = set()
-        self._check_if_changed = set()
         self._rebuild_if_changed = set()
         
         self._fixed_aliases = {}
@@ -473,6 +472,8 @@ class EMK_Base(object):
         self.log.setLevel(logging.INFO)
         self._options["log"] = "info"
         
+        self._options["emk_dev"] = "no"
+        
         self._build_threads = multiprocessing.cpu_count()
         self._options["threads"] = "x"
         
@@ -497,7 +498,7 @@ class EMK_Base(object):
                         else:
                             self.log.error("Unknown log level '%s'", level)
                     elif key == "emk_dev" and val == "yes":
-                        dev_stacks = True
+                        emk_dev = True
                     elif key == "threads":
                         if val != "x":
                             try:
@@ -707,11 +708,8 @@ class EMK_Base(object):
         for path in weak_secondaries:
             target = self._get_target(path, create_new=True)
             if target.rule:
-                self.log.info("Not treating %s as a weak dependency, because there is a rule to make it", target.abs_path)
                 target._required_by.add(rule)
-                required_targets.append((target, False))
-            else:
-                required_targets.append((target, True))
+            required_targets.append((target, True))
 
         rule._required_targets = required_targets
 
@@ -723,13 +721,6 @@ class EMK_Base(object):
     
     def _fix_requires_rule(self):
         self._requires_rule = set(self._resolve_build_dirs(self._requires_rule))
-    
-    def _fix_check_if_changed(self):
-        check_if_changed = set(self._resolve_build_dirs(self._check_if_changed))
-        for path in check_if_changed:
-            t = self._targets.get(path)
-            if t:
-                t._check_if_changed = True
     
     def _fix_rebuild_if_changed(self):
         for path in self._rebuild_if_changed:
@@ -771,7 +762,6 @@ class EMK_Base(object):
             else:
                 if os.path.exists(target.abs_path):
                     target._built = True
-                    target._check_if_changed = True
                 elif weak:
                     self.log.debug("Allowing weak dependency %s to not exist", target.abs_path)
                 else:
@@ -785,7 +775,7 @@ class EMK_Base(object):
                 rule._remaining_unbuilt_reqs = 0
                 for req, is_weak in rule._required_targets:
                     self._examine_target(req, is_weak)
-                    if (not is_weak) and (not req._built): # we can't build this rule immediately
+                    if (req.rule or not is_weak) and (not req._built): # we can't build this rule immediately
                         rule._remaining_unbuilt_reqs += 1
 
                 if not rule._remaining_unbuilt_reqs:
@@ -793,24 +783,35 @@ class EMK_Base(object):
                     self._buildable_rules.put(rule)
 
     def _done_rule(self, rule, built):
+        now = time.time()
         for t in rule.produces:
+            abs_path = t.abs_path
+            cache = rule._cache[abs_path]
+            virtual = cache.get("virtual", False)
             if built:
-                abs_path = t.abs_path
-                cache = rule._cache[abs_path]
-                if cache.get("exists", False):
-                    cache.pop("file_modtime", None)
+                t._changed = (t.abs_path not in rule._untouched)
+                
+                if virtual:
+                    if t._changed:
+                        t._virtual_modtime = cache["vmodtime"] = now
                 else:
+                    t._virtual = False
                     try:
-                        cache["file_modtime"] = os.path.getmtime(abs_path)
+                        cache["modtime"] = os.path.getmtime(abs_path)
                     except OSError:
                         rulestack = ["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack]
                         with self._lock:
                             del rule.scope._cache[rule._key]
                         raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
-                        
-                t._changed = (t.abs_path not in rule._untouched)
             else:
-                t._changed = None
+                t._changed = False
+            
+            if virtual and not t._changed:
+                modtime = cache.get("vmodtime")
+                if modtime is None:
+                    cache["vmodtime"] = modtime = 0
+                t._virtual_modtime = modtime
+        
             t._built = True
 
         for t in rule.produces:
@@ -827,19 +828,32 @@ class EMK_Base(object):
             with self._lock:
                 self._bad_rules.append(rule)
     
-    def has_changed_func(self, abs_path, cache, weak=False):
-        if abs_path is self.ALWAYS_BUILD:
+    def _req_has_changed(self, rule, req, cache, weak):
+        if req.abs_path is self.ALWAYS_BUILD:
             return True
-        
-        if cache.get("exists"):
+            
+        virtual_modtime = req._virtual_modtime
+        if virtual_modtime is None:
+            return rule.has_changed_func(req.abs_path, cache, weak)
+        else:
+            cached_modtime = cache.get("vmodtime")
+            if cached_modtime != virtual_modtime:
+                self.log.debug("Modtime (virtual) for %s has changed; cached = %s, actual = %s", req.abs_path, cached_modtime, virtual_modtime)
+                cache["vmodtime"] = virtual_modtime
+                if weak and cached_modtime is None:
+                    return False
+                return True
+            else:
+                self.log.debug("Modtime (virtual) for %s has not changed (%s)", req.abs_path, cached_modtime)
             return False
-        
+    
+    def has_changed_func(self, abs_path, cache, weak=False):
         try:
             modtime = os.path.getmtime(abs_path)
-            cached_modtime = cache.get("file_modtime")
+            cached_modtime = cache.get("modtime")
             if cached_modtime != modtime:
-                self.log.debug("Modtime for %s has changed; cached = %s, new = %s, weak = %s", abs_path, cached_modtime, modtime, weak)
-                cache["file_modtime"] = modtime
+                self.log.debug("Modtime for %s has changed; cached = %s, actual = %s", abs_path, cached_modtime, modtime)
+                cache["modtime"] = modtime
                 if weak and cached_modtime is None:
                     return False
                 return True
@@ -854,23 +868,20 @@ class EMK_Base(object):
         for req, weak in rule._required_targets:
             if req._changed:
                 changed_reqs.append(req.abs_path)
-            elif req._check_if_changed:
+            else:
                 rcache = rule._cache.get(req.abs_path)
                 if rcache is None:
                     rule._cache[req.abs_path] = rcache = {}
-                if rule.has_changed_func(req.abs_path, rcache, weak):
+                if self._req_has_changed(rule, req, rcache, weak):
                     changed_reqs.append(req.abs_path)
         return changed_reqs
     
     def _fixup_rule_cache(self, rule):
-        rule._target_paths = set([t.abs_path for t in rule.produces])
-        path_set = rule._target_paths | set([r.abs_path for r, w in rule._required_targets])
-        cache = rule._cache
-        remove = [k for k in cache if k not in path_set]
-        for k in remove:
-            del cache[k]
+        target_paths = set([t.abs_path for t in rule.produces])
+        path_set = target_paths | set([r.abs_path for r, w in rule._required_targets])
         
-        for p in rule._target_paths:
+        cache = rule._cache
+        for p in target_paths:
             if p not in cache:
                 cache[p] = {}
     
@@ -894,12 +905,13 @@ class EMK_Base(object):
                 else:
                     for t in rule.produces:
                         tcache = rule._cache[t.abs_path]
-                        if not tcache.get("exists") and not os.path.exists(t.abs_path):
-                            self.log.debug("Need to build %s because it does not exist", t.abs_path)
-                            need_build = True
-                        elif t._rebuild_if_changed and rule.has_changed_func(t.abs_path, tcache):
-                            self.log.debug("Need to build %s because it has changed", t.abs_path)
-                            need_build = True
+                        if not tcache.get("virtual", False): # virtual products of this rule cannot be modified externally
+                            if not os.path.exists(t.abs_path):
+                                self.log.debug("Need to build %s because it does not exist", t.abs_path)
+                                need_build = True
+                            elif t._rebuild_if_changed and rule.has_changed_func(t.abs_path, tcache):
+                                self.log.debug("Need to build %s because it has changed", t.abs_path)
+                                need_build = True
 
                 if need_build:
                     self._local.current_scope = rule.scope
@@ -1406,7 +1418,6 @@ class EMK(EMK_Base):
                 self._fix_attached()
                 self._fix_auto_targets()
                 self._fix_requires_rule()
-                self._fix_check_if_changed()
                 self._fix_rebuild_if_changed()
 
                 self._added_rule = False
@@ -1438,7 +1449,7 @@ class EMK(EMK_Base):
             if target.rule:
                 unbuilt_deps = []
                 for dep, weak in target.rule._required_targets:
-                    if (not weak) and (dep in unbuilt):
+                    if (dep.rule or not weak) and (dep in unbuilt):
                         unbuilt_deps.append(dep.abs_path)
                 unbuilt_lines.append("%s depends on unbuilt %s" % (target.abs_path, unbuilt_deps))
             else:
@@ -1579,13 +1590,6 @@ class EMK(EMK_Base):
                 self.log.debug("Requiring %s to be built by an explicit rule", abs_path)
                 self._requires_rule.add(abs_path)
     
-    def check_changed(self, *paths):
-        with self._lock:
-            for path in paths:
-                abs_path = _make_require_abspath(path, self.scope)
-                self.log.debug("%s will always be checked to see if it has changed", abs_path)
-                self._check_if_changed.add(abs_path)
-    
     def rebuild_if_changed(self, *paths):
         with self._lock:
             for path in paths:
@@ -1615,18 +1619,24 @@ class EMK(EMK_Base):
         with self._lock:
             self._postbuild_funcs.append((self.scope, func))
     
-    def mark_exists(self, *paths):
+    def mark_virtual(self, *paths):
         rule = self.current_rule
         if not rule:
-            self.log.warning("Cannot mark anything as existing when not in a rule")
+            self.log.warning("Cannot mark anything as virtual when not in a rule")
             return
         
-        abs_paths = set([_make_target_abspath(path, self.scope) for path in paths]) & rule._target_paths
+        abs_paths = set([_make_target_abspath(path, self.scope) for path in paths])
         cache = rule._cache
         for path in abs_paths:
-            tcache = cache[path]
-            self.log.debug("Marking %s as existing", path)
-            tcache["exists"] = True
+            tcache = cache.get(path)
+            # If there is no entry in the rule cache for the path, it is not a rule product
+            # Note that there may be other entries in the rule cache that are not products,
+            # but marking them as virtual has no effect (so it is harmless).
+            if tcache is None:
+                self.log.debug("Cannot mark %s as virtual since it is not a rule product", path)
+            else:
+                self.log.debug("Marking %s as virtual", path)
+                tcache["virtual"] = True
     
     def mark_untouched(self, *paths):
         if not self.current_rule:
@@ -1639,19 +1649,18 @@ class EMK(EMK_Base):
             self.log.debug("Marking %s as untouched", abs_path)
             untouched_set.add(abs_path)
     
-    def log_print(self, format, *args):
-        d = {'adorn':False}
-        self.log.info(format, *args, extra=d)
-    
-    def error_print(self, format, *args):
-        d = {'adorn':False}
-        self.log.error(format, *args, extra=d)
-    
-    def style_tag(self, tag):
-        return _style_tag(tag)
-    
-    def end_style(self):
-        return _style_tag('')
+    def rule_cache(self):
+        """
+        Retrieve the cache for a given rule. This can be used to store information between rule invocations.
+
+        The cache can only be retrieved when a rule is executing. The returned cache is a dict
+        that can be modified to store data for the next time the rule is run. This could be used (for example)
+        to store information to determine whether a product needs to be updated or can be marked 'untouched'.
+        """
+        rule = self.current_rule
+        if rule:
+            return rule._cache
+        return None
     
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
@@ -1663,19 +1672,60 @@ class EMK(EMK_Base):
         return self._resolve_build_dirs(paths, ignore_errors)
     
     def fix_stack(self, stack):
-        return _format_stack(_filter_stack(stack))
+        """
+        Filter a stack trace to remove emk or threading frames from the start.
     
-    def cached_data(self, path):
-        if self.current_rule:
-            return self.current_rule._cache.get(_make_target_abspath(path, self.scope))
-        return None
+        The stack trace should be from traceback.extract_stack() or traceback.extract_tb().
+        """
+        return _format_stack(_filter_stack(stack))
+        
+    def log_print(self, format, *args):
+        d = {'adorn':False}
+        self.log.info(format, *args, extra=d)
 
-def setup(argv=[]):
-    emk = EMK(argv)
+    def error_print(self, format, *args):
+        d = {'adorn':False}
+        self.log.error(format, *args, extra=d)
+
+    def style_tag(self, tag):
+        return _style_tag(tag)
+
+    def end_style(self):
+        return _style_tag('')
+
+
+def setup(args=[]):
+    """Set up EMK with the given arguments, and install it into builtins."""
+    emk = EMK(args)
     builtins.emk = emk
     return emk
 
 def main(args):
+    """
+    Execute the emk build process in the current directory.
+    
+    Arguments:
+    args -- A list of arguments to EMK. Arguments can either be options or targets.
+            An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
+            as explicit targets to be built. You may specify targets that contain '=' using the special option
+            "explicit_target=<target name>". All options (whether or not they are recognized by EMK) can be
+            accessed via the emk.options dict.
+            
+            If no explicit targets are specified, EMK will build all autobuild targets.
+    
+    Recognized options:
+    log     -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"],
+               although error and critical are probably not useful. The default value is "info".
+    emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
+               that errors within EMK can be debugged. The default value is "no".
+    threads -- Set the number of threads used by EMK for building. May be either a positive number, or "x".
+               If the value is a number, EMK will use that many threads for building; if the value is "x",
+               EMK will use as many threads as there are cores on the build machine. The default value is "x".
+    colors  -- Set the log coloring mode. May be one of ["no", "console", "html"]. If set to "no", log output coloring
+               is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
+               on Windows). If set to "html", the log output will be marked up with <p> and <span> tags that can then
+               be styled using CSS. The default value is "console".
+    """
     try:
         setup(args).run(os.getcwd())
         return 0

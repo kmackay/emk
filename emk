@@ -1,7 +1,15 @@
 #!/usr/bin/env python
 
 import sys
+import textwrap
 import emk
 
+def usage():
+    print "emk [args...]"
+    print textwrap.dedent(emk.main.__doc__)
+
 if __name__ == "__main__":
-    sys.exit(emk.main(sys.argv[1:]))
+    if "-h" in sys.argv:
+        usage()
+    else:
+        sys.exit(emk.main(sys.argv[1:]))

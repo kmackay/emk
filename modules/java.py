@@ -172,7 +172,7 @@ class Module(object):
             resource_sources, resource_dests = zip(*resource_set)
             emk.rule(["java.__jar_resources__"], resource_sources, self._copy_resources, threadsafe=True, ex_safe=True, args={"dests": resource_dests})
         else:
-            utils.mark_exists_rule(["java.__jar_resources__"], [])
+            utils.mark_virtual_rule(["java.__jar_resources__"], [])
         
         emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True)
         deps = [os.path.join(d, "java.__jar_contents__") for d in self._abs_depdirs]
@@ -254,7 +254,7 @@ class Module(object):
             utils.rm(dest)
             os.symlink(src, dest)
         
-        emk.mark_exists("java.__jar_resources__")
+        emk.mark_virtual("java.__jar_resources__")
     
     def _build_classes(self, produces, requires, args):
         global dir_cache
@@ -268,7 +268,7 @@ class Module(object):
             cmd.extend(utils.flatten_flags(self.compile_flags))
             cmd.extend(requires)
             utils.call(*cmd)
-        emk.mark_exists("java.__jar_contents__")
+        emk.mark_virtual("java.__jar_contents__")
         
     def _make_jar(self, produces, requires, args):
         jarfile = produces[0]
@@ -316,7 +316,7 @@ class Module(object):
                 raise
         else:
             log.warning("Not making %s, since it has no contents", jarfile)
-            emk.mark_exists(jarfile)
+            emk.mark_virtual(jarfile)
     
     def _make_exe_jar(self, produces, requires, args):
         dest = produces[0]
