@@ -1649,17 +1649,27 @@ class EMK(EMK_Base):
             self.log.debug("Marking %s as untouched", abs_path)
             untouched_set.add(abs_path)
     
-    def rule_cache(self):
+    def rule_cache(self, key):
         """
-        Retrieve the cache for a given rule. This can be used to store information between rule invocations.
-
-        The cache can only be retrieved when a rule is executing. The returned cache is a dict
-        that can be modified to store data for the next time the rule is run. This could be used (for example)
-        to store information to determine whether a product needs to be updated or can be marked 'untouched'.
+        Retrieve the cache for a given key string for the currently executing rule.
+        
+        The rule cache can be used to store information between rule invocations. The cache can only be retrieved
+        when a rule is executing. The returned cache is a dict that can be modified to store data for the next time
+        the rule is run. This could be used (for example) to store information to determine whether a product needs
+        to be updated or can be marked 'untouched'.
+        
+        Arguments:
+        key -- The key string to retrieve the cache for.
+        
+        Returns the cache dict for the given key (or an empty dict if there was currently no cache for that key).
+        Returns None if there is no currently executing rule.
         """
         rule = self.current_rule
         if rule:
-            return rule._cache
+            cache = rule._cache.get(key)
+            if cache is None:
+                rule._cache[key] = cache = {}
+            return cache
         return None
     
     def abspath(self, path):
@@ -1673,9 +1683,12 @@ class EMK(EMK_Base):
     
     def fix_stack(self, stack):
         """
-        Filter a stack trace to remove emk or threading frames from the start.
+        Filter and format a stack trace to remove emk or threading frames from the start.
     
-        The stack trace should be from traceback.extract_stack() or traceback.extract_tb().
+        Arguments:
+        stack -- The stack trace to fix; should be from traceback.extract_stack() or traceback.extract_tb().
+        
+        Returns the formatted stack as a list of strings.
         """
         return _format_stack(_filter_stack(stack))
         
