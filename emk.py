@@ -873,9 +873,7 @@ class EMK_Base(object):
         return changed_reqs
     
     def _fixup_rule_cache(self, rule):
-        path_set = set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])
-        path_set.remove(self.ALWAYS_BUILD)
-        
+        path_set = (set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])) - set([self.ALWAYS_BUILD])
         cache = rule._cache
         for p in path_set:
             if p not in cache:
