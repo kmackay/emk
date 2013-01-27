@@ -39,7 +39,6 @@ class _Target(object):
         self._visited = False
         
         self._virtual_modtime = None
-        self._changed = False
 
 class _Rule(object):
     def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed_func, scope):
@@ -756,7 +755,6 @@ class EMK_Base(object):
         if not target.rule:
             if target.abs_path is self.ALWAYS_BUILD:
                 target._built = True
-                target._changed = True
             elif target.abs_path in self._requires_rule:
                 self._need_undefined_rule = True
             else:
@@ -789,10 +787,10 @@ class EMK_Base(object):
             cache = rule._cache[abs_path]
             virtual = cache.get("virtual", False)
             if built:
-                t._changed = (t.abs_path not in rule._untouched)
+                changed = (t.abs_path not in rule._untouched)
                 
                 if virtual:
-                    if t._changed:
+                    if changed:
                         t._virtual_modtime = cache["vmodtime"] = now
                 else:
                     t._virtual = False
@@ -804,9 +802,9 @@ class EMK_Base(object):
                             del rule.scope._cache[rule._key]
                         raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
             else:
-                t._changed = False
+                changed = False
             
-            if virtual and not t._changed:
+            if virtual and not changed:
                 modtime = cache.get("vmodtime")
                 if modtime is None:
                     cache["vmodtime"] = modtime = 0
@@ -866,22 +864,20 @@ class EMK_Base(object):
     def _get_changed_reqs(self, rule):
         changed_reqs = []
         for req, weak in rule._required_targets:
-            if req._changed:
+            if req.abs_path is self.ALWAYS_BUILD:
                 changed_reqs.append(req.abs_path)
             else:
-                rcache = rule._cache.get(req.abs_path)
-                if rcache is None:
-                    rule._cache[req.abs_path] = rcache = {}
+                rcache = rule._cache[req.abs_path]
                 if self._req_has_changed(rule, req, rcache, weak):
                     changed_reqs.append(req.abs_path)
         return changed_reqs
     
     def _fixup_rule_cache(self, rule):
-        target_paths = set([t.abs_path for t in rule.produces])
-        path_set = target_paths | set([r.abs_path for r, w in rule._required_targets])
+        path_set = set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])
+        path_set.remove(self.ALWAYS_BUILD)
         
         cache = rule._cache
-        for p in target_paths:
+        for p in path_set:
             if p not in cache:
                 cache[p] = {}
     
