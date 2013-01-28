@@ -349,7 +349,7 @@ def _try_call_method(mod, name):
 def _flatten_gen(args):
     # args might be a string, or a list containing strings or lists
     global _string_type
-    if isinstance(args, _string_type):
+    if isinstance(args, (_string_type, _Always_Build)):
         yield args
     else: # assume a list-like thing
         for arg in args:
