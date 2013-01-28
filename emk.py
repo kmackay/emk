@@ -1493,7 +1493,7 @@ class EMK(EMK_Base):
         for name in _flatten_gen(names):
             mods.append(self._module(name, weak=False))
         if len(mods) == 1:
-            return mods[1]
+            return mods[0]
         return mods
 
     def weak_module(self, *names):
@@ -1501,7 +1501,7 @@ class EMK(EMK_Base):
         for name in _flatten_gen(names):
             mods.append(self._module(name, weak=True))
         if len(mods) == 1:
-            return mods[1]
+            return mods[0]
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
