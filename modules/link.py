@@ -85,7 +85,7 @@ class _GccLinker(object):
         if cxx_mode:
             linker = self.cxx_path
         
-        flat_flags = utils.flatten_flags(flags)
+        flat_flags = utils.flatten(flags)
         
         lib_dir_flags = ["-L" + d for d in lib_dirs]
         rel_lib_flags = ["-l" + lib for lib in rel_libs]

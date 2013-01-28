@@ -27,7 +27,7 @@ class _GccCompiler(object):
         args.extend(self.depfile_args(dep_file))
         args.extend(["-I%s" % (emk.abspath(d)) for d in includes])
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
-        args.extend(utils.flatten_flags(flags))
+        args.extend(utils.flatten(flags))
         args.extend(["-o", dest, "-c", source])
         utils.call(args)
         

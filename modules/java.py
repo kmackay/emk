@@ -265,7 +265,7 @@ class Module(object):
             classpath = ':'.join(self._classpaths | self._sysjars)
     
             cmd = ["javac", "-d", self._class_dir, "-sourcepath", emk.scope_dir, "-classpath", classpath]
-            cmd.extend(utils.flatten_flags(self.compile_flags))
+            cmd.extend(utils.flatten(self.compile_flags))
             cmd.extend(requires)
             utils.call(cmd)
         emk.mark_virtual("java.__jar_contents__")
