@@ -17,7 +17,7 @@ class Module(object):
         return Module(scope)
         
     def flatten(self, args):
-        return emk._flatten_gen(args)
+        return list(emk._flatten_gen(args))
 
     def unique_list(self, orig):
         result = []
