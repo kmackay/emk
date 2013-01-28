@@ -30,7 +30,7 @@ class _GccLinker(object):
         utils.call(self.ar_path, "x", lib, print_call=False, cwd=dest_dir)
     
     def add_to_static_lib(self, dest, objs):
-        utils.call(self.ar_path, "r", dest, *objs)
+        utils.call(self.ar_path, "r", dest, objs)
     
     def create_static_lib(self, dest, source_objs, other_libs):
         objs = list(source_objs)
@@ -78,7 +78,7 @@ class _GccLinker(object):
         sg = "-Wl,--start-group"
         eg = "-Wl,--end-group"
         call = [cmd] + flags + ["-o", dest] + objs + [sg] + abs_libs + [eg] + lib_dirs + [sg] + libs + [eg]
-        utils.call(*call)
+        utils.call(call)
 
     def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode=False):
         linker = self.c_path
@@ -125,21 +125,21 @@ class _OsxGccLinker(_GccLinker):
                     arch_obj = os.path.join(dest_dir, arch, obj)
                     if os.path.isfile(arch_obj):
                         cmd.append(arch_obj)
-                utils.call(*cmd, print_call=False)
+                utils.call(cmd, print_call=False)
 
     def add_to_static_lib(self, dest, objs):
         cmd = [self.libtool_path, "-static", "-s", "-o", dest, "-"]
         if os.path.isfile(dest):
             cmd.append(dest)
         cmd.extend(objs)
-        utils.call(*cmd)
+        utils.call(cmd)
 
     def shlib_opts(self):
         return ["-dynamiclib"]
     
     def link_cmd(self, cmd, flags, dest, objs, abs_libs, lib_dirs, libs):
         call = [cmd] + flags + ["-o", dest] + objs + abs_libs + lib_dirs + libs
-        utils.call(*call)
+        utils.call(call)
         
 link_cache = {}
 need_depdirs = {}
@@ -289,8 +289,8 @@ class Module(object):
             cached = link_cache[d]
             cached._all_depdirs.update(self._all_depdirs)
             cached._all_static_libs.update(self._all_static_libs)
-            emk.depend(os.path.join(d, "link.__exe_deps__"), *lib_deps)
-            emk.depend(os.path.join(d, "link.__exe_deps__"), *self._all_static_libs)
+            emk.depend(os.path.join(d, "link.__exe_deps__"), lib_deps)
+            emk.depend(os.path.join(d, "link.__exe_deps__"), self._all_static_libs)
         
         if self.detect_exe == "exact":
             emk.require_rule("link.__static_lib__", "link.__lib_in_lib__", "link.__shared_lib__", "link.__exe_deps__", "link.__exes__")
@@ -357,8 +357,8 @@ class Module(object):
         utils.mark_virtual_rule(["link.__exe_deps__"], ["link.__static_lib__"])
         
         lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
-        emk.depend("link.__exe_deps__", *lib_deps)
-        emk.depend("link.__exe_deps__", *self._all_static_libs)
+        emk.depend("link.__exe_deps__", lib_deps)
+        emk.depend("link.__exe_deps__", self._all_static_libs)
         
         dirname = os.path.basename(emk.scope_dir)
         making_static_lib = False

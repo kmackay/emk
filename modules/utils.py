@@ -16,15 +16,8 @@ class Module(object):
     def new_scope(self, scope):
         return Module(scope)
         
-    def flatten_flags(self, flags):
-        result = []
-        for flag in flags:
-            try:
-                flag.startswith('a')
-                result.append(flag)
-            except AttributeError:
-                result.extend(self.flatten_flags(flag))
-        return result
+    def flatten(self, args):
+        return emk._flatten_gen(args)
 
     def unique_list(self, orig):
         result = []
@@ -73,6 +66,7 @@ class Module(object):
             os.chdir(self.orig)
 
     def call(self, *args, **kwargs):
+        args = list(emk._flatten_gen(args))
         print_call = True
         print_stdout = False
         print_stderr = "nonzero"
@@ -118,7 +112,7 @@ class Module(object):
         emk.rule(produces, requires, self.mark_virtual, threadsafe=True, ex_safe=True)
         
     def mark_virtual(self, produces, requires, args):
-        emk.mark_virtual(*produces)
+        emk.mark_virtual(produces)
     
     def copy_rule(self, source, dest):
         emk.rule([dest], [source, emk.ALWAYS_BUILD], self.copy_file, threadsafe=True, ex_safe=True)
@@ -129,7 +123,7 @@ class Module(object):
         
         try:
             if(os.path.isfile(dest) and filecmp.cmp(dest, src, shallow=False)):
-                emk.mark_untouched(*produces)
+                emk.mark_untouched(produces)
                 return
                 
             emk.log.info("Copying %s to %s" % (src, dest))
@@ -141,6 +135,7 @@ class Module(object):
             raise
 
     def clean_rule(self, *patterns):
+        patterns = list(emk._flatten_gen(patterns))
         target = "__clean_rule_%d__" % (self._clean_rules)
         self._clean_rules += 1
         emk.rule([target], [emk.ALWAYS_BUILD], self.do_cleanup, args=patterns)
@@ -151,4 +146,4 @@ class Module(object):
         for pattern in patterns:
             for f in glob.glob(pattern):
                 self.rm(f, print_msg=True)
-        emk.mark_virtual(*produces)
+        emk.mark_virtual(produces)

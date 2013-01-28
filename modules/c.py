@@ -29,7 +29,7 @@ class _GccCompiler(object):
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
         args.extend(utils.flatten_flags(flags))
         args.extend(["-o", dest, "-c", source])
-        utils.call(*args)
+        utils.call(args)
         
         try:
             with open(dep_file, "r+") as f:
@@ -211,7 +211,7 @@ class Module(object):
         
         emk.rule([dest], requires, self.do_compile, args=args, threadsafe=True, ex_safe=True)
         if extra_deps:
-            emk.weak_depend(dest, *extra_deps)
+            emk.weak_depend(dest, extra_deps)
     
     def do_compile(self, produces, requires, args):
         if not self.compiler:

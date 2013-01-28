@@ -176,7 +176,7 @@ class Module(object):
         
         emk.rule(["java.__jar_contents__"], sources, self._build_classes, threadsafe=True)
         deps = [os.path.join(d, "java.__jar_contents__") for d in self._abs_depdirs]
-        emk.depend("java.__jar_contents__", *deps)
+        emk.depend("java.__jar_contents__", deps)
         emk.depend("java.__jar_contents__", "java.__jar_resources__")
         
         self._class_dir = os.path.join(emk.scope_dir, emk.build_dir, "classes")
@@ -267,7 +267,7 @@ class Module(object):
             cmd = ["javac", "-d", self._class_dir, "-sourcepath", emk.scope_dir, "-classpath", classpath]
             cmd.extend(utils.flatten_flags(self.compile_flags))
             cmd.extend(requires)
-            utils.call(*cmd)
+            utils.call(cmd)
         emk.mark_virtual("java.__jar_contents__")
         
     def _make_jar(self, produces, requires, args):
@@ -309,7 +309,7 @@ class Module(object):
         
             cmd = ["jar", "cf", jarfile, "-C", jarfile_contents, "."]
             try:
-                utils.call(*cmd)
+                utils.call(cmd)
                 utils.call("jar", "i", jarfile)
             except:
                 utils.rm(jarfile)

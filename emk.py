@@ -4,8 +4,10 @@ import os
 import sys
 import imp
 if sys.version_info[0] < 3:
+    _string_type = basestring
     import __builtin__ as builtins
 else:
+    _string_type = str
     import builtins
 import logging
 import collections
@@ -344,6 +346,16 @@ def _try_call_method(mod, name):
     except Exception:
         raise _BuildError("Error running %s.%s()" % (mod.name, name), _get_exception_info())
 
+def _flatten_gen(args):
+    # args might be a string, or a list containing strings or lists
+    global _string_type
+    if isinstance(args, _string_type):
+        yield args
+    else: # assume a list-like thing
+        for arg in args:
+            for s in _flatten_gen(arg):
+                yield s
+
 def _get_exception_info():
     t, value, trace = sys.exc_info()
     stack = traceback.extract_tb(trace)
@@ -407,6 +419,8 @@ def _make_require_abspath(rel_path, scope):
 class EMK_Base(object):
     def __init__(self, args):
         global emk_dev
+        
+        self._flatten_gen = _flatten_gen
         
         self.log = logging.getLogger("emk")
         handler = logging.StreamHandler(sys.stdout)
@@ -532,7 +546,7 @@ class EMK_Base(object):
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call import_from() when building", stack)
 
-        fixed_paths = [_make_target_abspath(path, self.scope) for path in paths]
+        fixed_paths = [_make_target_abspath(path, self.scope) for path in _flatten_gen(paths)]
 
         oldpath = os.getcwd()
         fp = None
@@ -1294,11 +1308,11 @@ class EMK_Base(object):
             return
         seen_produces = set([emk.ALWAYS_BUILD])
         fixed_produces = []
-        for p in produces:
+        for p in _flatten_gen(produces):
             if p and p not in seen_produces:
                 seen_produces.add(p)
                 fixed_produces.append(p)
-        fixed_requires = [_make_require_abspath(r, self.scope) for r in requires if r != ""]
+        fixed_requires = [_make_require_abspath(r, self.scope) for r in _flatten_gen(requires) if r != ""]
         
         if not has_changed_func:
             has_changed_func = self.has_changed_func
@@ -1473,23 +1487,21 @@ class EMK(EMK_Base):
         _try_call_method(mod, "load_" + self.scope.scope_type)
         self.scope.weak_modules[name] = mod
         return instance
-
-    def module(self, name):
-        return self._module(name, weak=False)
     
-    def modules(self, *names):
+    def module(self, *names):
         mods = []
-        for name in names:
+        for name in _flatten_gen(names):
             mods.append(self._module(name, weak=False))
+        if len(mods) == 1:
+            return mods[1]
         return mods
-    
-    def weak_module(self, name):
-        return self._module(name, weak=True)
 
-    def weak_modules(self, *names):
+    def weak_module(self, *names):
         mods = []
-        for name in names:
+        for name in _flatten_gen(names):
             mods.append(self._module(name, weak=True))
+        if len(mods) == 1:
+            return mods[1]
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
@@ -1524,7 +1536,7 @@ class EMK(EMK_Base):
         return decorate
     
     def depend(self, target, *dependencies):
-        fixed_depends = [_make_require_abspath(d, self.scope) for d in dependencies if d != ""]
+        fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(dependencies) if d != ""]
         if not fixed_depends:
             return
         
@@ -1537,7 +1549,7 @@ class EMK(EMK_Base):
                 self._secondary_dependencies[abspath] = list(fixed_depends)
     
     def weak_depend(self, target, *dependencies):
-        fixed_depends = [_make_require_abspath(d, self.scope) for d in dependencies if d != ""]
+        fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(dependencies) if d != ""]
         if not fixed_depends:
             return
 
@@ -1550,7 +1562,7 @@ class EMK(EMK_Base):
                 self._weak_dependencies[abspath] = list(fixed_depends)
     
     def attach(self, target, *attached_targets):
-        fixed_depends = [_make_require_abspath(d, self.scope) for d in attached_targets if d != ""]
+        fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(attached_targets) if d != ""]
         abspath = _make_target_abspath(target, self.scope)
         self.log.debug("Attaching %s to target %s", fixed_depends, abspath)
         with self._lock:
@@ -1561,7 +1573,7 @@ class EMK(EMK_Base):
     
     def autobuild(self, *targets):
         with self._lock:
-            for target in targets:
+            for target in _flatten_gen(targets):
                 self.log.debug("Marking %s for automatic build", target)
                 self._auto_targets.add(_make_target_abspath(target, self.scope))
     
@@ -1579,27 +1591,27 @@ class EMK(EMK_Base):
     
     def require_rule(self, *paths):
         with self._lock:
-            for path in paths:
+            for path in _flatten_gen(paths):
                 abs_path = _make_require_abspath(path, self.scope)
                 self.log.debug("Requiring %s to be built by an explicit rule", abs_path)
                 self._requires_rule.add(abs_path)
     
     def rebuild_if_changed(self, *paths):
         with self._lock:
-            for path in paths:
+            for path in _flatten_gen(paths):
                 abs_path = _make_target_abspath(path, self.scope)
                 self.log.debug("Requiring %s to be rebuilt if it has changed", abs_path)
                 self._rebuild_if_changed.add(abs_path)
     
     def recurse(self, *paths):
-        for path in paths:
+        for path in _flatten_gen(paths):
             abspath = _make_target_abspath(path, self.scope)
             self.log.debug("Adding recurse directory %s", abspath)
             self.scope.recurse_dirs.add(abspath)
     
     def subdir(self, *paths):
-        self.recurse(*paths)
-        sub_cleans = [os.path.join(path, "clean") for path in paths]
+        self.recurse(paths)
+        sub_cleans = [os.path.join(path, "clean") for path in _flatten_gen(paths)]
         self.attach("clean", *sub_cleans)
     
     def do_later(self, func):
@@ -1619,7 +1631,7 @@ class EMK(EMK_Base):
             self.log.warning("Cannot mark anything as virtual when not in a rule")
             return
         
-        abs_paths = set([_make_target_abspath(path, self.scope) for path in paths])
+        abs_paths = set([_make_target_abspath(path, self.scope) for path in _flatten_gen(paths)])
         cache = rule._cache
         for path in abs_paths:
             tcache = cache.get(path)
@@ -1638,7 +1650,7 @@ class EMK(EMK_Base):
             return
             
         untouched_set = self.current_rule._untouched
-        for path in paths:
+        for path in _flatten_gen(paths):
             abs_path = _make_target_abspath(path, self.scope)
             self.log.debug("Marking %s as untouched", abs_path)
             untouched_set.add(abs_path)
