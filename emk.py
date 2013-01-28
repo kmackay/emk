@@ -1200,9 +1200,9 @@ class EMK_Base(object):
         self._local.current_scope = _ScopeData(self._local.current_scope, "rules", path, self._current_proj_dir)
         
         self.scope.prepare_do_later()
-        self.modules(*self.scope.pre_modules) # load preload modules
+        self.module(self.scope.pre_modules) # load preload modules
         if not self.import_from([path], "emk_rules"):
-            self.modules(*self.scope.default_modules)
+            self.module(self.scope.default_modules)
         self._run_do_later_funcs()
         
         self.scope.prepare_do_later()
