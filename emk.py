@@ -90,7 +90,7 @@ class _ScopeData(object):
         self.dir = dir
         self.proj_dir = proj_dir
         
-        self._cache = {}
+        self._cache = None
         self._do_later_funcs = []
         self._wrapped_rules = []
         
@@ -957,6 +957,7 @@ class EMK_Base(object):
         # otherwise, build all explicit targets and autobuild targets that we can
 
         self._building = True
+        self._load_scope_caches()
 
         self._buildable_rules = _RuleQueue(self._build_threads)
         
@@ -1152,13 +1153,17 @@ class EMK_Base(object):
         self._local.current_scope = parent_scope
         self._current_proj_dir = proj_dir
     
-    def _load_scope_cache(self):
-        self.scope._cache = {}
-        try:
-            with open(os.path.join(self.scope.build_dir, "__emk_cache__"), "rb") as f:
-                self.scope._cache = pickle.load(f)
-        except IOError:
-            pass
+    def _load_scope_caches(self):
+        for path, scope in self._visited_dirs.items():
+            if scope._cache is None:
+                scope._cache = {}
+                if not self.cleaning:
+                    cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
+                    try:
+                        with open(cache_path, "rb") as f:
+                            scope._cache = pickle.load(f)
+                    except IOError:
+                        pass
     
     def _write_scope_caches(self):
         if self.cleaning:
@@ -1217,7 +1222,6 @@ class EMK_Base(object):
         
         if not self._cleaning:
             _mkdirs(self.scope.build_dir)
-        self._load_scope_cache()
         if first_dir:
             self._fix_explicit_targets()
         
