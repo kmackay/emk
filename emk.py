@@ -955,6 +955,8 @@ class EMK_Base(object):
         # if there are explicit targets, see if we have rules for all of them
         # if so, just build those targets (and we should stop the build process)
         # otherwise, build all explicit targets and autobuild targets that we can
+        
+        start_time = time.time()
 
         self._building = True
         self._load_scope_caches()
@@ -1027,6 +1029,7 @@ class EMK_Base(object):
             raise _BuildError("At least one rule failed to build", lines)
 
         self._building = False
+        self._time_lines.append("Build %d: %0.3f seconds" % (self._build_phase, time.time() - start_time))
     
     def _run_do_later_funcs(self):
         # run do_later commands until there aren't any more
@@ -1051,6 +1054,8 @@ class EMK_Base(object):
         return False
     
     def _run_prebuild_funcs(self):
+        do_time = bool(self._prebuild_funcs)
+        start_time = time.time()
         while self._prebuild_funcs:
             funcs = self._prebuild_funcs
             self._prebuild_funcs = []
@@ -1072,8 +1077,13 @@ class EMK_Base(object):
                 raise
             except Exception as e:
                 raise _BuildError("Error running prebuild function (in %s)" % (self.scope.dir), _get_exception_info())
+        if do_time:
+            self._time_lines.append("Prebuild %d: %0.3f seconds" % (self._build_phase, time.time() - start_time))
     
     def _run_postbuild_funcs(self):
+        do_time = bool(self._postbuild_funcs)
+        start_time = time.time()
+        
         funcs = self._postbuild_funcs
         self._postbuild_funcs = []
         try:
@@ -1088,6 +1098,9 @@ class EMK_Base(object):
             raise
         except Exception as e:
             raise _BuildError("Error running postbuild function (in %s)" % (self.scope.dir), _get_exception_info())
+        
+        if do_time:
+            self._time_lines.append("Postbuild %d: %0.3f seconds" % (self._build_phase, time.time() - start_time))
     
     def _run_module_post_functions(self):
         fname = "post_" + self.scope.scope_type
@@ -1154,6 +1167,7 @@ class EMK_Base(object):
         self._current_proj_dir = proj_dir
     
     def _load_scope_caches(self):
+        start_time = time.time()
         for path, scope in self._visited_dirs.items():
             if scope._cache is None:
                 scope._cache = {}
@@ -1164,10 +1178,12 @@ class EMK_Base(object):
                             scope._cache = pickle.load(f)
                     except IOError:
                         pass
+        self._load_cache_time += (time.time() - start_time)
     
     def _write_scope_caches(self):
         if self.cleaning:
             return
+        start_time = time.time()
         for path, scope in self._visited_dirs.items():
             cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
             if scope._cache:
@@ -1187,6 +1203,7 @@ class EMK_Base(object):
                     os.remove(cache_path)
                 except OSError:
                     pass
+        self._time_lines.append("Writing caches: %0.3f seconds" % (time.time() - start_time))
     
     def _handle_dir(self, d, first_dir=False):
         path = os.path.realpath(d)
@@ -1406,11 +1423,17 @@ class EMK(EMK_Base):
         self.insert_module("clean", _Clean_Module(self.scope_name))
         self.pre_modules.append("clean")
         
+        self._time_lines = []
+        self._build_phase = 1
+        self._load_cache_time = 0
+        
         try:
             self._load_config()
             
             start_time = time.time()
             self._handle_dir(path, first_dir=True)
+            
+            self._time_lines.append("Recursion 1: %0.3f seconds" % (time.time() - start_time))
 
             self._done_build = False
             while ((self._have_unbuilt() or self._explicit_targets) and (self._added_rule or self._prebuild_funcs or self._postbuild_funcs)) or \
@@ -1438,8 +1461,12 @@ class EMK(EMK_Base):
                 self._must_build = []
             
                 self._run_postbuild_funcs()
+                
+                self._build_phase += 1
             
                 # recurse into any new dirs
+                recursed = False
+                recurse_start = time.time()
                 for scope in self._visited_dirs.values():
                     if scope.recurse_dirs:
                         recurse_dirs = scope.recurse_dirs
@@ -1448,7 +1475,13 @@ class EMK(EMK_Base):
                         self._local.current_scope = scope.parent
                         for d in recurse_dirs:
                             self._handle_dir(d)
+                            recursed = True
+                if recursed:
+                    self._time_lines.append("Recursion %d: %0.3f seconds" % (self._build_phase, time.time() - recurse_start))
+                    
         finally:
+            if not self.cleaning:
+                self._time_lines.append("Loading caches: %0.3f seconds" % (self._load_cache_time))
             self._write_scope_caches()
         
         unbuilt = set()
@@ -1472,6 +1505,9 @@ class EMK(EMK_Base):
         if self._explicit_targets:
             raise _BuildError("No rule creates these explicitly specified targets:", self._explicit_targets)
         
+        
+        for line in self._time_lines:
+            self.log.info(line)
         diff = time.time() - start_time
         self.log.info("Finished in %0.3f seconds" % (diff))
     
