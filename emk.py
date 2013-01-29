@@ -583,7 +583,7 @@ class EMK_Base(object):
             self._targets[path] = target
             return target
 
-    def _resolve_build_dirs(self, dirs, ignore_errors=False):
+    def _resolve_build_dirs(self, dirs):
         # fix paths (convert $:build:$)
         updated_paths = []
         for path in dirs:
@@ -598,10 +598,8 @@ class EMK_Base(object):
                     n = begin + self._known_build_dirs[d] + end
                     updated_paths.append(n)
                     self.log.debug("Fixed %s in path: %s => %s" % (self.build_dir_placeholder, path, n))
-                elif not ignore_errors:
-                    raise _BuildError("Could not resolve %s for path %s" % (self.build_dir_placeholder, path))
                 else:
-                    updated_paths.append(None)
+                    raise _BuildError("Could not resolve %s for path %s" % (self.build_dir_placeholder, path))
             else:
                 updated_paths.append(path)
         return updated_paths
@@ -1352,7 +1350,7 @@ class EMK_Base(object):
                 lines.append("Rule definition:")
                 lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
             lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
-            self.error_print('\n'.join(lines))
+            self.log.error('\n'.join(lines), extra={'adorn':False})
 
 class EMK(EMK_Base):
     def __init__(self, args):
@@ -1706,12 +1704,6 @@ class EMK(EMK_Base):
     def abspath(self, path):
         return _make_target_abspath(path, self.scope)
     
-    def resolve_build_dirs(self, *paths, **kwargs):
-        ignore_errors = False
-        if "ignore_errors" in kwargs and kwargs["ignore_errors"]:
-            ignore_errors = True
-        return self._resolve_build_dirs(paths, ignore_errors)
-    
     def fix_stack(self, stack):
         """
         Filter and format a stack trace to remove emk or threading frames from the start.
@@ -1722,14 +1714,6 @@ class EMK(EMK_Base):
         Returns the formatted stack as a list of strings.
         """
         return _format_stack(_filter_stack(stack))
-        
-    def log_print(self, format, *args):
-        d = {'adorn':False}
-        self.log.info(format, *args, extra=d)
-
-    def error_print(self, format, *args):
-        d = {'adorn':False}
-        self.log.error(format, *args, extra=d)
 
     def style_tag(self, tag):
         return _style_tag(tag)
@@ -1774,13 +1758,13 @@ def main(args):
         setup(args).run(os.getcwd())
         return 0
     except KeyboardInterrupt:
-        emk.error_print("\nemk: Interrupted")
+        emk.log.error("\nemk: Interrupted", extra={'adorn':False})
         emk._print_bad_rules()
         return 1
     except _BuildError as e:
         lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
         if e.extra_info:
             lines.extend(["    " + line.replace('\n', "\n    ") for line in e.extra_info])
-        emk.error_print('\n'.join(lines))
+        emk.log.error('\n'.join(lines), extra={'adorn':False})
         emk._print_bad_rules()
         return 1

@@ -99,7 +99,7 @@ class Module(object):
             strings.append(emk.style_tag('u') + "Subprocess stderr:" + emk.end_style())
             strings.append(emk.style_tag('stderr') + proc_stderr + emk.end_style())
         if strings:
-            emk.log_print('\n'.join(strings))
+            log.info('\n'.join(strings), extra={'adorn':False})
         if exit_on_nonzero_return and proc.returncode != 0:
             stack = emk.fix_stack(traceback.extract_stack()[:-1])
             if emk.options["log"] == "debug" and emk.current_rule:
