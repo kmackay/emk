@@ -1393,6 +1393,46 @@ class EMK(EMK_Base):
     current_rule = property(lambda self: self._local.current_rule)
     
     def run(self, path):
+        """
+        Run the EMK build in the given directory.
+        
+        The build process in a given directory goes as follows:
+          1. Load the global emk config from <emk dir>/config/emk_global.py>, if it exists and has not
+              already been loaded (creates the root scope).
+          2. Find the project dir. The project dir is the closest ancestor to the current directory that
+              contains an "emk_project.py" file, or the root directory if no project file is found.
+          3. Load the project file "emk_project.py" from the project dir if it exists and has not already been loaded (creates a new scope).
+          4. For each directory between the project dir and the current dir, load "emk_subproj.py" from that directory
+              if it exists and has not already been loaded (creates a new scope).
+          5. Create the rules scope for the current directory.
+          6. Load any premodules.
+          7. Load "emk_rules.py" from the current directory if it exists; otherwise, load the default modules (if any).
+          8. Run module post_rules() methods.
+          9. Recurse into any specified dirs that have not already been visited.
+        
+        Once there are no more directories to recurse into, the prebuild functions are executed until there aren't any more.
+        Prebuild functions specified during the prebuild phase are executed after all of the previous prebuild functions
+        have been executed.
+        
+        Then, the first build phase starts. If explicit targets have been specified and they can all be resolved, only those
+        targets (and their dependencies) are examined. Otherwise, all autobuild targets (and their dependencies) are examined.
+        Examined targets will be run if the dependencies have changed (or if the products have changed and have been declared
+        as rebuld_if_changed).
+        
+        Building continues until everything that can be built (from the set of examined targets) has been built. Note that it is
+        possible that not all examined targets could be built immediately, since they may depend on things for which rules have
+        not yet been declared. EMK will attempt to build those targets later.
+        
+        Once building is complete, the postbuild functions are executed. Note that if new postbuild functions are added during
+        the postbuild phase, they will not be executed until after the next build phase.
+        
+        Finally, any new directories are recursed into. If there is still work left to do (ie, unbuilt targets), EMK will start
+        a new build phase (returning to the prebuild step). Build phases will continue until all targets are built, or until
+        there is nothing left to do. If there are unbuilt targets after building has stopped, a build error is raised.
+        
+        Arguments:
+        path -- The directory to start the build process from.
+        """
         if self._did_run:
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call run() again", stack)
@@ -1649,6 +1689,17 @@ class EMK(EMK_Base):
             self._postbuild_funcs.append((self.scope, func))
     
     def mark_virtual(self, *paths):
+        """
+        Mark the given paths as virtual.
+        
+        After a rule is executed, EMK checks to ensure that the rule has generated all of its declared products.
+        Products that were marked as virtual by the rule are not expected to exist as actual files. All non-virtual
+        products must exist in the filesystem.
+        
+        Arguments:
+        paths -- The list of paths to mark as virtual. The paths may be absolute, or relative to the scope dir.
+                 Project and build dir placeholders will be resolved.
+        """
         rule = self.current_rule
         if not rule:
             self.log.warning("Cannot mark anything as virtual when not in a rule")
@@ -1668,6 +1719,20 @@ class EMK(EMK_Base):
                 tcache["virtual"] = True
     
     def mark_untouched(self, *paths):
+        """
+        Mark the given paths as untouched.
+        
+        As a rule is executing, it may discover that some or all of its products do not actually need to be updated.
+        In this case, the rule should mark those products as untouched. This will prevent unnecessary execution of
+        rules that depend on the unmodified products.
+        
+        Note that this currently is only required for virtual products; for real products, you can achieve the same
+        effect by not modifying the product.
+        
+        Arguments:
+        paths -- The list of paths to mark as untouched. The paths may be absolute, or relative to the scope dir.
+                 Project and build dir placeholders will be resolved.
+        """
         if not self.current_rule:
             self.log.warning("Cannot mark anything as untouched when not in a rule")
             return
@@ -1702,6 +1767,22 @@ class EMK(EMK_Base):
         return None
     
     def abspath(self, path):
+        """
+        Convert a path into an absolute path based on the current scope.
+        
+        When a rule is executing, the current working directory of the process will not necessarily be the
+        directory that the rule was defined in (if the rule was declared to be threadsafe). However, the directory
+        that the rule was defined in is always available via emk.scope_dir. The abspath() method uses the scope dir
+        to convert the given path into an absolute path, if it was not already absolute.
+        
+        Will convert the project and build dir placeholders ("$:proj:$" and "$:build:$", by default) with the current
+        scope's project and build dirs.
+        
+        Arguments:
+        path -- The path to convert to an absolute path.
+        
+        Returns the path in absolute form, relative to the scope dir.
+        """
         return _make_target_abspath(path, self.scope)
     
     def fix_stack(self, stack):
@@ -1716,9 +1797,40 @@ class EMK(EMK_Base):
         return _format_stack(_filter_stack(stack))
 
     def style_tag(self, tag):
+        """
+        Return a style tag string for the given tag.
+        
+        The emk log system uses tags to mark up the log output. The "no" styler translates all tags into ''.
+        The HTML styler accepts any tag, since the tags are just converted to <span class='tagname'>.
+        The console styler currently recognizes the following tags:
+          'bold'       -- Bold/bright text.
+          'u'          -- Underline.
+          'red'        -- Red text.
+          'green'      -- Green text.
+          'blue'       -- Blue text.
+          'important'  -- Bold and red text.
+          'rule_stack' -- Blue text.
+          'stderr'     -- Red text.
+        Tag mappings can me modified/added to the console styler by modifying its self.styles dict.
+
+        Note that there may be multiple style tags in effect at any time (just like nested tags in HTML).
+        Styles are applied in a stack, with more recently encountered tags taking precedence. When an
+        "end style" string is encountered, the topmost style in the stack is removed.
+        
+        Arguments:
+        tag -- The style tag to be converted into a tag string.
+        
+        Returns a string representing the tag in a way that is unlikely to occur in normal log output.
+        """
         return _style_tag(tag)
 
     def end_style(self):
+        """
+        Return an "end style" string.
+        
+        When the emk logger encounters and "end style" string it will remove the most recently
+        applied style (popping it off the stack). 
+        """
         return _style_tag('')
 
 
