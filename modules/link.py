@@ -34,7 +34,7 @@ class _GccLinker(object):
     
     def create_static_lib(self, dest, source_objs, other_libs):
         objs = list(source_objs)
-        dump_dir = os.path.join(emk.build_dir, "__lib_temp__")
+        dump_dir = os.path.join(emk.scope_dir, emk.build_dir, "__lib_temp__")
         utils.mkdirs(dump_dir)
 
         counter = 0
