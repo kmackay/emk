@@ -955,8 +955,6 @@ class EMK_Base(object):
         # if there are explicit targets, see if we have rules for all of them
         # if so, just build those targets (and we should stop the build process)
         # otherwise, build all explicit targets and autobuild targets that we can
-        
-        start_time = time.time()
 
         self._building = True
         self._load_scope_caches()
@@ -1029,7 +1027,6 @@ class EMK_Base(object):
             raise _BuildError("At least one rule failed to build", lines)
 
         self._building = False
-        self._time_lines.append("Build %d: %0.3f seconds" % (self._build_phase, time.time() - start_time))
     
     def _run_do_later_funcs(self):
         # run do_later commands until there aren't any more
