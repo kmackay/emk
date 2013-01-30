@@ -166,13 +166,13 @@ class Module(object):
         c_flags = utils.unique_list(self.flags + self.c.flags)
         c_defines = dict(self.defines)
         c_defines.update(self.c.defines)
-        c_args = {"c++":False, "includes":c_includes, "defines":c_defines, "flags":c_flags}
+        c_args = (False, c_includes, c_defines, c_flags)
         
         cxx_includes = utils.unique_list(self.include_dirs + self.cxx.include_dirs)
         cxx_flags = utils.unique_list(self.flags + self.cxx.flags)
         cxx_defines = dict(self.defines)
         cxx_defines.update(self.cxx.defines)
-        cxx_args = {"c++":True, "includes":cxx_includes, "defines":cxx_defines, "flags":cxx_flags}
+        cxx_args = (True, cxx_includes, cxx_defines, cxx_flags)
         
         objs = {}
         for src in c_sources:
@@ -209,18 +209,18 @@ class Module(object):
         if extra_deps is None:
             requires.append(emk.ALWAYS_BUILD)
         
-        emk.rule([dest], requires, self.do_compile, args=args, threadsafe=True, ex_safe=True)
+        emk.rule(self.do_compile, [dest], requires, *args, threadsafe=True, ex_safe=True)
         if extra_deps:
             emk.weak_depend(dest, extra_deps)
     
-    def do_compile(self, produces, requires, args):
+    def do_compile(self, produces, requires, cxx, includes, defines, flags):
         if not self.compiler:
             raise emk.BuildError("No compiler defined!")
         try:
-            if args["c++"]:
-                self.compiler.compile_cxx(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
+            if cxx:
+                self.compiler.compile_cxx(requires[0], produces[0], produces[0] + ".dep", includes, defines, flags)
             else:
-                self.compiler.compile_c(requires[0], produces[0], produces[0] + ".dep", args["includes"], args["defines"], args["flags"])
+                self.compiler.compile_c(requires[0], produces[0], produces[0] + ".dep", includes, defines, flags)
         except:
             utils.rm(produces[0])
             utils.rm(produces[0] + ".dep")

@@ -30,7 +30,7 @@ class _Target(object):
     Properties should not be modified.
     
     Properties:
-      orig_path -- The original (relative) path of the target, as specified to emk.rule() or @emk.produces.
+      orig_path -- The original (relative) path of the target, as specified to emk.rule() or @emk.make_rule.
       rule      -- The emk.Rule instance that generates this target.
       abs_path  -- The canonical path of the target.
       attached  -- The set of targets (canonical paths) that have been attached to this target. Only usable when a rule is executing.
@@ -60,21 +60,22 @@ class _Rule(object):
     Properties should not be modified.
     
     Properties:
+      func       -- The function to execute to run the rule. This should take at least 2 arguments: the list of canonical product paths,
+                    the list of canonical requirement paths, and any additional args as desired.
       produces   -- The list of emk.Target instances that are produced by this rule.
       requires   -- The list of things that this rule depends on (canonical paths). These are the primary dependencies of the rule.
                     All primary dependencies of a rule are built before the rule is built. If a primary dependency does not
                     exist, a build error is raised.
-      args       -- The arbitrary args object that will be passed to the rule function (specified when the rule was created with emk.rule()).
-      func       -- The function to execute to run the rule. This should take 3 arguments: the list of canonical product paths,
-                    the list of canonical requirement paths, and the args object.
+      args       -- The arbitrary args that will be passed (unpacked) to the rule function (specified when the rule was created).
       threadsafe -- Whether or not the rule is threadsafe (True or False). Specified when the rule was created. Non-threadsafe rules are executed
                     sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
                     before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
       ex_safe    -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
                     a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
-      stack      -- The stack of the rule definition (a list of strings).
       has_changed_func -- The function to execute to determine if a requirement or product has changed. Uses emk.has_changed_func by default.
                           The function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+                          
+      stack      -- The stack of where the rule was defined (a list of strings).
     
     Build-time properties (only usable when the rule is being executed):
       weak_deps      -- The set of weak dependencies (canonical paths) of this rule (added using emk.weak_depend()).
@@ -86,13 +87,15 @@ class _Rule(object):
                         exist, a build error is raised.
     """
     def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed_func, scope):
+        self.func = func
         self.produces = []
         self.requires = requires
         self.args = args
-        self.func = func
-        self.scope = scope
         self.threadsafe = threadsafe
         self.ex_safe = ex_safe
+        self.has_changed_func = has_changed_func
+        
+        self.scope = scope
         
         self._key = None
         self._cache = None
@@ -103,27 +106,11 @@ class _Rule(object):
         self.secondary_deps = set()
         self.weak_deps = set()
         
-        self.has_changed_func = has_changed_func
-        
         self._required_targets = []
         self._remaining_unbuilt_reqs = 0
         self._want_build = False
         self._built = False
         self.stack = []
-
-class _RuleWrapper(object):
-    def __init__(self, func, stack=[], produces=[], requires=[], args=[], threadsafe=False, ex_safe=False, has_changed_func=None):
-        self.func = func
-        self.stack = stack
-        self.produces = produces
-        self.requires = requires
-        self.args = args
-        self.threadsafe = threadsafe
-        self.ex_safe = ex_safe
-        self.has_changed_func = has_changed_func
-
-    def __call__(self, produces, requires, args):
-        return self.func(produces, requires, args)
 
 class _ScopeData(object):
     def __init__(self, parent, scope_type, dir, proj_dir):
@@ -134,7 +121,6 @@ class _ScopeData(object):
         
         self._cache = None
         self._do_later_funcs = []
-        self._wrapped_rules = []
         
         if parent:
             self.default_modules = list(parent.default_modules)
@@ -156,7 +142,6 @@ class _ScopeData(object):
     
     def prepare_do_later(self):
         self._do_later_funcs = []
-        self._wrapped_rules = []
 
 class _RuleQueue(object):
     def __init__(self, num_threads):
@@ -252,7 +237,7 @@ class _Clean_Module(object):
     def new_scope(self, scope):
         return _Clean_Module(scope, self)
     
-    def clean_func(self, produces, requires, args):
+    def clean_func(self, produces, requires):
         build_dir = os.path.realpath(os.path.join(emk.scope_dir, emk.build_dir))
         if self.remove_build_dir:
             if os.path.commonprefix([build_dir, emk.scope_dir]) == emk.scope_dir:
@@ -263,7 +248,7 @@ class _Clean_Module(object):
         emk.mark_virtual(*produces)
     
     def post_rules(self):
-        emk.rule(["clean"], [emk.ALWAYS_BUILD], self.clean_func, threadsafe=True, ex_safe=True)
+        emk.rule(self.clean_func, ["clean"], [emk.ALWAYS_BUILD], threadsafe=True, ex_safe=True)
 
 class _Module_Instance(object):
     def __init__(self, name, instance, mod):
@@ -969,7 +954,7 @@ class EMK_Base(object):
             
                     self.scope.prepare_do_later()
                     self._local.current_rule = rule
-                    rule.func(produces, rule.requires, rule.args)
+                    rule.func(produces, rule.requires, *rule.args)
                     self._run_do_later_funcs()
                     self._local.current_rule = None
 
@@ -1080,9 +1065,6 @@ class EMK_Base(object):
             raise
         except Exception as e:
             raise _BuildError("Error running do_later function (in %s)" % (self.scope.dir), _get_exception_info())
-        
-        for wrapper in self.scope._wrapped_rules:
-            self._rule(wrapper.produces, wrapper.requires, wrapper.args, wrapper.func, wrapper.threadsafe, wrapper.ex_safe, wrapper.has_changed_func, wrapper.stack)
     
     def _have_unbuilt(self):
         for target in self._toplevel_examined_targets:
@@ -1350,7 +1332,7 @@ class EMK_Base(object):
         self.log.info("Module %s not found", name)
         return None
     
-    def _rule(self, produces, requires, args, func, threadsafe, ex_safe, has_changed_func, stack):
+    def _rule(self, func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack):
         if self.scope_name != "rules":
             self.log.warning("Cannot create rules when not in 'rules' scope (current scope = '%s')", self.scope_name)
             return
@@ -1436,7 +1418,7 @@ class EMK(EMK_Base):
       pre_modules     -- Modules that are preloaded before each emk_rules.py file is loaded. May be modified; is inherited by child scopes.
       
       local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
-                       (ie, as passed into emk.rule() or @emk.produces) to the emk.Target instance.
+                       (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
       current_rule  -- The currently exceuting rule (an emk.Rule instance), or None if a rule is not being executed.
     """
     
@@ -1655,34 +1637,22 @@ class EMK(EMK_Base):
         return mods
     
     # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
-    def rule(self, produces, requires, func, args=[], threadsafe=False, ex_safe=False, has_changed_func=None):
+    def rule(self, func, produces, requires, *args, **kwargs):
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-        self._rule(produces, requires, args, func, threadsafe, ex_safe, has_changed_func, stack)
+        threadsafe = kwargs.get("threadsafe", False)
+        ex_safe = kwargs.get("ex_safe", False)
+        has_changed_func = kwargs.get("has_changed_func", None)
+        self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack)
     
     # decorator for simple rule creation
-    def produces(self, *targets):
-        def decorate(f):
-            if isinstance(f, _RuleWrapper):
-                f.produces = targets
-                return f
-            else:
-                stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
-                wrapper = _RuleWrapper(f, stack, produces=targets)
-                self.scope._wrapped_rules.append(wrapper)
-                return wrapper
-        return decorate
-
-    # decorator for simple rule creation
-    def requires(self, *depends):
-        def decorate(f):
-            if isinstance(f, _RuleWrapper):
-                f.requires = depends
-                return f
-            else:
-                stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
-                wrapper = _RuleWrapper(f, stack, requires=depends)
-                self.scope._wrapped_rules.append(wrapper)
-                return wrapper
+    def make_rule(self, produces, requires, *args, **kwargs):
+        def decorate(func):
+            stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            threadsafe = kwargs.get("threadsafe", False)
+            ex_safe = kwargs.get("ex_safe", False)
+            has_changed_func = kwargs.get("has_changed_func", None)
+            self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack)
+            return func
         return decorate
     
     def depend(self, target, *dependencies):

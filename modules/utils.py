@@ -109,15 +109,15 @@ class Module(object):
         return (proc_stdout, proc_stderr, proc.returncode)
 
     def mark_virtual_rule(self, produces, requires):
-        emk.rule(produces, requires, self.mark_virtual, threadsafe=True, ex_safe=True)
+        emk.rule(self.mark_virtual, produces, requires, threadsafe=True, ex_safe=True)
         
-    def mark_virtual(self, produces, requires, args):
+    def mark_virtual(self, produces, requires):
         emk.mark_virtual(produces)
     
     def copy_rule(self, source, dest):
-        emk.rule([dest], [source, emk.ALWAYS_BUILD], self.copy_file, threadsafe=True, ex_safe=True)
+        emk.rule(self.copy_file, dest, [source, emk.ALWAYS_BUILD], threadsafe=True, ex_safe=True)
     
-    def copy_file(self, produces, requires, args):
+    def copy_file(self, produces, requires):
         dest = produces[0]
         src = requires[0]
         
@@ -138,11 +138,10 @@ class Module(object):
         patterns = list(emk._flatten_gen(patterns))
         target = "__clean_rule_%d__" % (self._clean_rules)
         self._clean_rules += 1
-        emk.rule([target], [emk.ALWAYS_BUILD], self.do_cleanup, args=patterns)
+        emk.rule(self.do_cleanup, target, emk.ALWAYS_BUILD, patterns)
         emk.attach("clean", target)
     
-    def do_cleanup(self, produces, requires, args):
-        patterns = args
+    def do_cleanup(self, produces, requires, patterns):
         for pattern in patterns:
             for f in glob.glob(pattern):
                 self.rm(f, print_msg=True)

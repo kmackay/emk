@@ -368,7 +368,7 @@ class Module(object):
                 libname = self.lib_prefix + dirname + self.static_lib_ext
                 libpath = os.path.join(emk.build_dir, libname)
                 self._static_libpath = libpath
-                emk.rule([libpath], lib_objs, self._create_static_lib, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True, args={"all_libs": False})
+                emk.rule(self._create_static_lib, libpath, lib_objs, False, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True)
                 emk.alias(libpath, "link.__static_lib__")
                 emk.autobuild(libpath)
             if self.make_shared_lib:
@@ -376,7 +376,7 @@ class Module(object):
                 if self.shared_libname:
                     libname = self.shared_libname
                 libpath = os.path.join(emk.build_dir, libname)
-                emk.rule([libpath], ["link.__exe_deps__"] + list(lib_objs), self._create_shared_lib, threadsafe=self.linker.link_threadsafe(), ex_safe=True)
+                emk.rule(self._create_shared_lib, libpath, ["link.__exe_deps__"] + list(lib_objs), threadsafe=self.linker.link_threadsafe(), ex_safe=True)
                 emk.autobuild(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
@@ -387,8 +387,8 @@ class Module(object):
             if self.static_libname:
                 libname = self.static_libname
             libpath = os.path.join(emk.build_dir, libname)
-            emk.rule([libpath], ["link.__static_lib__", "link.__exe_deps__"], self._create_static_lib, \
-                threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True, args={"all_libs": True})
+            emk.rule(self._create_static_lib, libpath, ["link.__static_lib__", "link.__exe_deps__"], True, \
+                threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True)
             emk.alias(libpath, "link.__lib_in_lib__")
             emk.autobuild(libpath)
         
@@ -406,19 +406,19 @@ class Module(object):
             name = name + self.exe_ext
             
             path = os.path.join(emk.build_dir, name)
-            emk.rule([path], [obj, "link.__exe_deps__"], self._create_exe, threadsafe=self.linker.link_threadsafe(), ex_safe=True)
+            emk.rule(self._create_exe, path, [obj, "link.__exe_deps__"], threadsafe=self.linker.link_threadsafe(), ex_safe=True)
             emk.alias(path, name)
             exe_targets.append(path)
             
         utils.mark_virtual_rule(["link.__exes__"], exe_targets)
         emk.autobuild("link.__exes__")
     
-    def _create_static_lib(self, produces, requires, args):
+    def _create_static_lib(self, produces, requires, lib_in_lib):
         global link_cache
         
         objs = []
         other_libs = set()
-        if args["all_libs"]:
+        if lib_in_lib:
             if self._static_libpath:
                 other_libs.add(emk.abspath(self._static_libpath))
             other_libs |= set(self.local_static_libs)
@@ -437,7 +437,7 @@ class Module(object):
             utils.rm(produces[0])
             raise
     
-    def _create_shared_lib(self, produces, requires, args):
+    def _create_shared_lib(self, produces, requires):
         global link_cache
         
         flags = self.linker.shlib_opts() + self.local_flags + self.flags + self.local_libflags + self.libflags
@@ -464,7 +464,7 @@ class Module(object):
             utils.rm(produces[0])
             raise
     
-    def _create_exe(self, produces, requires, args):
+    def _create_exe(self, produces, requires):
         global link_cache
         
         flags = self.linker.exe_opts() + self.local_flags + self.flags + self.local_exeflags + self.exeflags
