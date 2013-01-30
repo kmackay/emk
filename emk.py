@@ -24,6 +24,17 @@ import hashlib
 _module_path = os.path.realpath(__file__)
 
 class _Target(object):
+    """
+    Representation of a potential target (ie, a rule product).
+    
+    Properties should not be modified.
+    
+    Properties:
+      orig_path -- The original (relative) path of the target, as specified to emk.rule() or @emk.produces.
+      rule      -- The emk.Rule instance that generates this target.
+      abs_path  -- The canonical path of the target.
+      attached  -- The set of targets (canonical paths) that have been attached to this target. Only usable when a rule is executing.
+    """
     def __init__(self, local_path, rule):
         self.orig_path = local_path
         self.rule = rule
@@ -32,7 +43,7 @@ class _Target(object):
         else:
             self.abs_path = local_path
             
-        self.attached_deps = set()
+        self.attached = set()
         
         self._rebuild_if_changed = False
         
@@ -43,6 +54,37 @@ class _Target(object):
         self._virtual_modtime = None
 
 class _Rule(object):
+    """
+    Representation of a rule.
+    
+    Properties should not be modified.
+    
+    Properties:
+      produces   -- The list of emk.Target instances that are produced by this rule.
+      requires   -- The list of things that this rule depends on (canonical paths). These are the primary dependencies of the rule.
+                    All primary dependencies of a rule are built before the rule is built. If a primary dependency does not
+                    exist, a build error is raised.
+      args       -- The arbitrary args object that will be passed to the rule function (specified when the rule was created with emk.rule()).
+      func       -- The function to execute to run the rule. This should take 3 arguments: the list of canonical product paths,
+                    the list of canonical requirement paths, and the args object.
+      threadsafe -- Whether or not the rule is threadsafe (True or False). Specified when the rule was created. Non-threadsafe rules are executed
+                    sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
+                    before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
+      ex_safe    -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
+                    a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
+      stack      -- The stack of the rule definition (a list of strings).
+      has_changed_func -- The function to execute to determine if a requirement or product has changed. Uses emk.has_changed_func by default.
+                          The function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+    
+    Build-time properties (only usable when the rule is being executed):
+      weak_deps      -- The set of weak dependencies (canonical paths) of this rule (added using emk.weak_depend()).
+                        If a weak dependency does not exist, the rule is still built. If there is no cached information
+                        for a weak dependency, the dependency is treated as "not changed" (so the rule will not be rebuilt).
+                        Primarily used for dependencies that are discovered within the primary dependenceies (eg, header files).
+      secondary_deps -- The set of extra dependencies (canonical paths) of this rule (added using emk.depend()).
+                        All secondary dependencies of a rule are built before the rule is built. If a secondary dependency does not
+                        exist, a build error is raised.
+    """
     def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed_func, scope):
         self.produces = []
         self.requires = requires
@@ -424,8 +466,8 @@ class EMK_Base(object):
         
         self.log = logging.getLogger("emk")
         handler = logging.StreamHandler(sys.stdout)
-        formatter = _Formatter("%(name)s (%(levelname)s): %(message)s")
-        handler.setFormatter(formatter)
+        self.formatter = _Formatter("%(name)s (%(levelname)s): %(message)s")
+        handler.setFormatter(self.formatter)
         self.log.addHandler(handler)
         self.log.propagate = False
         
@@ -531,7 +573,7 @@ class EMK_Base(object):
             else:
                 self._explicit_targets.add(arg)
         
-        formatter.styler = stylers[self._options["colors"]]()
+        self.formatter.styler = stylers[self._options["colors"]]()
         
         self.log.info("Using %d %s", self._build_threads, ("thread" if self._build_threads == 1 else "threads"))
         
@@ -687,7 +729,7 @@ class EMK_Base(object):
             target = self._get_target(path)
             if target:
                 new_deps = set(self._resolve_build_dirs(attached))
-                target.attached_deps = target.attached_deps.union(new_deps)
+                target.attached = target.attached.union(new_deps)
                 if target._built: # need to build now, since it was attached to something that was already built
                     l = [self._get_target(a) for a in new_deps]
                     dep_targets = [t for t in l if t]
@@ -759,7 +801,7 @@ class EMK_Base(object):
         target._visited = True
         self.log.debug("Examining target %s", target.abs_path)
 
-        for path in target.attached_deps:
+        for path in target.attached:
             t = self._get_target(path)
             if t:
                 self._examine_target(t, False)
@@ -1353,6 +1395,51 @@ class EMK_Base(object):
             self.log.error('\n'.join(lines), extra={'adorn':False})
 
 class EMK(EMK_Base):
+    """
+    The public EMK API.
+    
+    The module-level setup() function (called by main()) installs an instance of this class into builtins named 'emk'.
+    Therefore you can access this instance from within your emk_global.py, emk_project.py, emk_subproj.py, or emk_rules.py
+    files without importing. For example, you can use emk.build_dir to get the local relative build directory.
+    
+    Classes:
+      BuildError -- Exception type raised when a build error occurs.
+      Target     -- Representation of a potential target (ie, a rule product).
+      Rule       -- Representation of a rule.
+    
+    Global properties (not based on current scope):
+      log          -- The EMK log (named 'emk'). Modules should create sub-logs of this to use the EMK logging features.
+      formatter    -- The formatter instance for the EMK log.
+      
+      ALWAYS_BUILD -- A special token. When used as a rule requirement, ensures that the rule will always be executed.
+      
+      has_changed_func -- The default function to determine if a rule requirement or product has changed. If replaced,
+                          the replacement's function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+      
+      build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
+      proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
+      
+      cleaning -- True if "clean" has been passed as an explicit target; false otherwise.
+      building -- True when rules are being executed, false at other times.
+      emk_dir  -- The directory which contains the emk module.
+      options  -- A dict containing all command-line options passed to EMK (ie, arguments of the form key=value). May be modified.
+      explicit_targets -- The set of explicit targets passed to EMK (ie, all arguments that are not options).
+    
+    Scoped properties (apply only to the current scope):
+      scope_name -- The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
+      proj_dir   -- The absolute path of the project directory for the current scope.
+      scope_dir  -- The absolute path of the directory in which the scope was created (eg, the directory from which the emk_<scope name>.py file was loaded).
+      
+      build_dir       -- The relative path to the build output directory. May be modified; is inherited by child scopes.
+      module_paths    -- Additional absolute paths to search for modules. May be modified; is inherited by child scopes.
+      default_modules -- Modes that are loaded if no emk_rules.py file is present. May be modified; is inherited by child scopes.
+      pre_modules     -- Modules that are preloaded before each emk_rules.py file is loaded. May be modified; is inherited by child scopes.
+      
+      local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
+                       (ie, as passed into emk.rule() or @emk.produces) to the emk.Target instance.
+      current_rule  -- The currently exceuting rule (an emk.Rule instance), or None if a rule is not being executed.
+    """
+    
     def __init__(self, args):
         super(EMK, self).__init__(args)
         
@@ -1431,7 +1518,7 @@ class EMK(EMK_Base):
         there is nothing left to do. If there are unbuilt targets after building has stopped, a build error is raised.
         
         Arguments:
-        path -- The directory to start the build process from.
+          path -- The directory to start the build process from.
         """
         if self._did_run:
             stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
@@ -1697,8 +1784,8 @@ class EMK(EMK_Base):
         products must exist in the filesystem.
         
         Arguments:
-        paths -- The list of paths to mark as virtual. The paths may be absolute, or relative to the scope dir.
-                 Project and build dir placeholders will be resolved.
+          paths -- The list of paths to mark as virtual. The paths may be absolute, or relative to the scope dir.
+                   Project and build dir placeholders will be resolved.
         """
         rule = self.current_rule
         if not rule:
@@ -1730,8 +1817,8 @@ class EMK(EMK_Base):
         effect by not modifying the product.
         
         Arguments:
-        paths -- The list of paths to mark as untouched. The paths may be absolute, or relative to the scope dir.
-                 Project and build dir placeholders will be resolved.
+          paths -- The list of paths to mark as untouched. The paths may be absolute, or relative to the scope dir.
+                   Project and build dir placeholders will be resolved.
         """
         if not self.current_rule:
             self.log.warning("Cannot mark anything as untouched when not in a rule")
@@ -1753,7 +1840,7 @@ class EMK(EMK_Base):
         to be updated or can be marked 'untouched'.
         
         Arguments:
-        key -- The key string to retrieve the cache for.
+          key -- The key string to retrieve the cache for.
         
         Returns the cache dict for the given key (or an empty dict if there was currently no cache for that key).
         Returns None if there is no currently executing rule.
@@ -1779,7 +1866,7 @@ class EMK(EMK_Base):
         scope's project and build dirs.
         
         Arguments:
-        path -- The path to convert to an absolute path.
+          path -- The path to convert to an absolute path.
         
         Returns the path in absolute form, relative to the scope dir.
         """
@@ -1790,7 +1877,7 @@ class EMK(EMK_Base):
         Filter and format a stack trace to remove emk or threading frames from the start.
     
         Arguments:
-        stack -- The stack trace to fix; should be from traceback.extract_stack() or traceback.extract_tb().
+          stack -- The stack trace to fix; should be from traceback.extract_stack() or traceback.extract_tb().
         
         Returns the formatted stack as a list of strings.
         """
@@ -1812,13 +1899,14 @@ class EMK(EMK_Base):
           'rule_stack' -- Blue text.
           'stderr'     -- Red text.
         Tag mappings can me modified/added to the console styler by modifying its self.styles dict.
+        For example, "emk.formatter.styler.styles['blink'] = '\033[5m'"
 
         Note that there may be multiple style tags in effect at any time (just like nested tags in HTML).
         Styles are applied in a stack, with more recently encountered tags taking precedence. When an
         "end style" string is encountered, the topmost style in the stack is removed.
         
         Arguments:
-        tag -- The style tag to be converted into a tag string.
+          tag -- The style tag to be converted into a tag string.
         
         Returns a string representing the tag in a way that is unlikely to occur in normal log output.
         """
@@ -1845,7 +1933,7 @@ def main(args):
     Execute the emk build process in the current directory.
     
     Arguments:
-    args -- A list of arguments to EMK. Arguments can either be options or targets.
+      args -- A list of arguments to EMK. Arguments can either be options or targets.
             An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
             as explicit targets to be built. You may specify targets that contain '=' using the special option
             "explicit_target=<target name>". All options (whether or not they are recognized by EMK) can be
@@ -1854,17 +1942,17 @@ def main(args):
             If no explicit targets are specified, EMK will build all autobuild targets.
     
     Recognized options:
-    log     -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"],
-               although error and critical are probably not useful. The default value is "info".
-    emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
-               that errors within EMK can be debugged. The default value is "no".
-    threads -- Set the number of threads used by EMK for building. May be either a positive number, or "x".
-               If the value is a number, EMK will use that many threads for building; if the value is "x",
-               EMK will use as many threads as there are cores on the build machine. The default value is "x".
-    colors  -- Set the log coloring mode. May be one of ["no", "console", "html"]. If set to "no", log output coloring
-               is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
-               on Windows). If set to "html", the log output will be marked up with <p> and <span> tags that can then
-               be styled using CSS. The default value is "console".
+      log     -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"],
+                 although error and critical are probably not useful. The default value is "info".
+      emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
+                 that errors within EMK can be debugged. The default value is "no".
+      threads -- Set the number of threads used by EMK for building. May be either a positive number, or "x".
+                 If the value is a number, EMK will use that many threads for building; if the value is "x",
+                 EMK will use as many threads as there are cores on the build machine. The default value is "x".
+      colors  -- Set the log coloring mode. May be one of ["no", "console", "html"]. If set to "no", log output coloring
+                 is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
+                 on Windows). If set to "html", the log output will be marked up with <p> and <span> tags that can then
+                 be styled using CSS. The default value is "console".
     """
     try:
         setup(args).run(os.getcwd())
