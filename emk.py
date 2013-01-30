@@ -560,8 +560,6 @@ class EMK_Base(object):
         
         self.formatter.styler = stylers[self._options["colors"]]()
         
-        self.log.info("Using %d %s", self._build_threads, ("thread" if self._build_threads == 1 else "threads"))
-        
         if "clean" in self._explicit_targets:
             self._cleaning = True
             self._explicit_targets = set(["clean"])
@@ -1507,6 +1505,8 @@ class EMK(EMK_Base):
             raise _BuildError("Cannot call run() again", stack)
         self._did_run = True
         
+        self.log.info("Using %d %s", self._build_threads, ("thread" if self._build_threads == 1 else "threads"))
+        
         path = os.path.realpath(path)
         root_scope = _ScopeData(None, "global", path, _find_project_dir(path))
         root_scope.module_paths.append(os.path.join(self._emk_dir, "modules"))
@@ -1555,8 +1555,10 @@ class EMK(EMK_Base):
             
                 self._run_postbuild_funcs()
                 
+                self.log.info("**** End of phase %d ****", self._build_phase)
+                
                 now = time.time()
-                self._time_lines.append("Build phase %d: %0.3f seconds" % (self._build_phase, now - phase_start_time))
+                self._time_lines.append("Phase %d: %0.3f seconds" % (self._build_phase, now - phase_start_time))
                 phase_start_time = now
                 self._build_phase += 1
             
