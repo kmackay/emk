@@ -305,7 +305,7 @@ class _ConsoleStyler(object):
             if style is not None:
                 stack.append(style)
                 bits.append(style)
-            elif m.group(1) == '':
+            elif m.group(1) == '' or m.group(1) == '__end__':
                 prevstyle = stack.pop()
                 if prevstyle:
                     bits.append("\033[0m")
@@ -321,13 +321,17 @@ class _ConsoleStyler(object):
         
 class _HtmlStyler(object):
     def __init__(self):
-        self.r = re.compile("\000\001([0-9A-Za-z_]+)\001\000")
+        self.div_regex = re.compile("\000\001__start__\001\000")
+        self.end_div_regex = re.compile("\000\001__end__\001\000" + r'\s*')
+        self.span_regex = re.compile("\000\001([0-9A-Za-z_]+)\001\000")
         
     def style(self, string, record):
         string = string.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-        string = self.r.sub(r'<span class="emk_\1">', string)
+        string = self.div_regex.sub('<div class="emk_log emk_%s">' % (record.orig_levelname), string)
+        string = self.end_div_regex.sub('</div>', string)
+        string = self.span_regex.sub(r'<span class="emk_\1">', string)
         string = string.replace("\000\001\001\000", '</span>').replace("\n", "<br>").replace("    ", "&nbsp;&nbsp;&nbsp;&nbsp;")
-        return '<div class="emk_log emk_%s">' % (record.orig_levelname) + string + '</div>'
+        return string
 
 class _Formatter(logging.Formatter):
     def __init__(self, format):
@@ -340,9 +344,9 @@ class _Formatter(logging.Formatter):
         record.levelname = _style_tag('logtype') + record.levelname.lower() + _style_tag('')
             
         if record.__dict__.get("adorn") is False:
-            return self.styler.style(record.message, record)
+            return self.styler.style(_style_tag('__start__') + record.message + _style_tag('__end__'), record)
         
-        return self.styler.style(self.format_str % record.__dict__, record)
+        return self.styler.style(_style_tag('__start__') + (self.format_str % (record.__dict__)) + _style_tag('__end__'), record)
 
 def _find_project_dir(path):
     dir = path
@@ -1863,7 +1867,9 @@ class EMK(EMK_Base):
         """
         Return a style tag string for the given tag.
         
-        The emk log system uses tags to mark up the log output. The "no" styler translates all tags into ''.
+        The emk log system uses tags to mark up the log output. Different stylers have different effects on the final output.
+        The "no" styler translates all tags into ''.
+        The "passthrough" styler does not modify tags in any way (useful if emk is calling itself).
         The HTML styler accepts any tag, since the tags are just converted to <span class='tagname'>.
         The console styler currently recognizes the following tags:
           'bold'       -- Bold/bright text.
