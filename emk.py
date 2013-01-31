@@ -276,6 +276,10 @@ class _NoStyler(object):
         
     def style(self, string, record):
         return self.r.sub('', string)
+
+class _PassthroughStyler(object):
+    def style(self, string, record):
+        return string
         
 class _ConsoleStyler(object):
     def __init__(self):
@@ -323,7 +327,7 @@ class _HtmlStyler(object):
         string = string.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
         string = self.r.sub(r'<span class="emk_\1">', string)
         string = string.replace("\000\001\001\000", '</span>').replace("\n", "<br>").replace("    ", "&nbsp;&nbsp;&nbsp;&nbsp;")
-        return '<p class="emk_log emk_%s">' % (record.orig_levelname) + string + '</p>'
+        return '<div class="emk_log emk_%s">' % (record.orig_levelname) + string + '</div>'
 
 class _Formatter(logging.Formatter):
     def __init__(self, format):
@@ -517,12 +521,12 @@ class EMK_Base(object):
         self._build_threads = multiprocessing.cpu_count()
         self._options["threads"] = "x"
         
-        stylers = {"no":_NoStyler, "console":_ConsoleStyler, "html":_HtmlStyler}
+        stylers = {"no":_NoStyler, "console":_ConsoleStyler, "html":_HtmlStyler, "passthrough":_PassthroughStyler}
         
         if sys.platform == "win32":
-            self._options["colors"] = "no"
+            self._options["style"] = "no"
         else:
-            self._options["colors"] = "console"
+            self._options["style"] = "console"
         
         self._explicit_targets = set()
         for arg in args:
@@ -549,16 +553,16 @@ class EMK_Base(object):
                                 self.log.error("Thread count '%s' cannot be converted to an integer", val)
                                 val = 1
                             self._build_threads = val
-                    elif key == "colors":
+                    elif key == "style":
                         if val not in stylers:
-                            self.log.error("Unknown color style option '%s'", level)
+                            self.log.error("Unknown log style option '%s'", level)
                             val = "no"
                             
                     self._options[key] = val
             else:
                 self._explicit_targets.add(arg)
         
-        self.formatter.styler = stylers[self._options["colors"]]()
+        self.formatter.styler = stylers[self._options["style"]]()
         
         if "clean" in self._explicit_targets:
             self._cleaning = True
@@ -1921,9 +1925,9 @@ def main(args):
       threads -- Set the number of threads used by EMK for building. May be either a positive number, or "x".
                  If the value is a number, EMK will use that many threads for building; if the value is "x",
                  EMK will use as many threads as there are cores on the build machine. The default value is "x".
-      colors  -- Set the log coloring mode. May be one of ["no", "console", "html"]. If set to "no", log output coloring
+      style   -- Set the log style mode. May be one of ["no", "console", "html"]. If set to "no", log output styling
                  is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
-                 on Windows). If set to "html", the log output will be marked up with <p> and <span> tags that can then
+                 on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
                  be styled using CSS. The default value is "console".
     """
     try:
