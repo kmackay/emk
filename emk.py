@@ -728,7 +728,7 @@ class EMK_Base(object):
                         if not d._built:
                             self._must_build.append(d)
             else:
-                self.log.info("Target %s was attached to, but not yet defined as a product of a rule", path)
+                self.log.debug("Target %s was attached to, but not yet defined as a product of a rule", path)
 
     def _fix_requires(self, rule):
         if rule._built:
@@ -767,7 +767,7 @@ class EMK_Base(object):
         self._requires_rule = set(self._resolve_build_dirs(self._requires_rule))
     
     def _fix_rebuild_if_changed(self):
-        for path in self._rebuild_if_changed:
+        for path in self._resolve_build_dirs(self._rebuild_if_changed):
             t = self._targets.get(path)
             if t:
                 t._rebuild_if_changed = True
@@ -953,15 +953,13 @@ class EMK_Base(object):
                                 need_build = True
 
                 if need_build:
+                    produces = [p.abs_path for p in rule.produces]
                     self._local.current_scope = rule.scope
+                    
+                    self._local.current_rule = rule
                     if not rule.threadsafe:
                         os.chdir(rule.scope.dir)
-                    produces = [p.abs_path for p in rule.produces]
-            
-                    self.scope.prepare_do_later()
-                    self._local.current_rule = rule
                     rule.func(produces, rule.requires, *rule.args)
-                    self._run_do_later_funcs()
                     self._local.current_rule = None
 
                 self._done_rule(rule, need_build)
@@ -1388,44 +1386,46 @@ class EMK(EMK_Base):
     
     The module-level setup() function (called by main()) installs an instance of this class into builtins named 'emk'.
     Therefore you can access this instance from within your emk_global.py, emk_project.py, emk_subproj.py, or emk_rules.py
-    files without importing. For example, you can use emk.build_dir to get the local relative build directory.
+    files without importing. For example, you can use emk.build_dir to get the relative build directory for the current scope.
     
     Classes:
       BuildError -- Exception type raised when a build error occurs.
       Target     -- Representation of a potential target (ie, a rule product).
       Rule       -- Representation of a rule.
     
-    Global properties (not based on current scope):
-      log          -- The EMK log (named 'emk'). Modules should create sub-logs of this to use the EMK logging features.
-      formatter    -- The formatter instance for the EMK log.
+    Global read-only properties (not based on current scope):
+      log              -- The EMK log (named 'emk'). Modules should create sub-logs of this to use the EMK logging features.
+      formatter        -- The formatter instance for the EMK log.
       
-      ALWAYS_BUILD -- A special token. When used as a rule requirement, ensures that the rule will always be executed.
+      ALWAYS_BUILD     -- A special token. When used as a rule requirement, ensures that the rule will always be executed.
       
-      has_changed_func -- The default function to determine if a rule requirement or product has changed. If replaced,
-                          the replacement's function signature should be "def has_changed_func(abs_path, cache, weak=False):".
-      
-      build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
-      proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
-      
-      cleaning -- True if "clean" has been passed as an explicit target; false otherwise.
-      building -- True when rules are being executed, false at other times.
-      emk_dir  -- The directory which contains the emk module.
-      options  -- A dict containing all command-line options passed to EMK (ie, arguments of the form key=value). May be modified.
+      cleaning         -- True if "clean" has been passed as an explicit target; false otherwise.
+      building         -- True when rules are being executed, false at other times.
+      emk_dir          -- The directory which contains the emk module.
+      options          -- A dict containing all command-line options passed to EMK (ie, arguments of the form key=value).
+                          You can modify the contents of this dict.
       explicit_targets -- The set of explicit targets passed to EMK (ie, all arguments that are not options).
     
-    Scoped properties (apply only to the current scope):
-      scope_name -- The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
-      proj_dir   -- The absolute path of the project directory for the current scope.
-      scope_dir  -- The absolute path of the directory in which the scope was created (eg, the directory from which the emk_<scope name>.py file was loaded).
-      
-      build_dir       -- The relative path to the build output directory. May be modified; is inherited by child scopes.
-      module_paths    -- Additional absolute paths to search for modules. May be modified; is inherited by child scopes.
-      default_modules -- Modes that are loaded if no emk_rules.py file is present. May be modified; is inherited by child scopes.
-      pre_modules     -- Modules that are preloaded before each emk_rules.py file is loaded. May be modified; is inherited by child scopes.
-      
+    Global modifiable properties:
+      has_changed_func      -- The default function to determine if a rule requirement or product has changed. If replaced,
+                               the replacement's function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+      build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
+      proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
+    
+    Scoped read-only properties (apply only to the current scope):
+      scope_name    -- The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
+      proj_dir      -- The absolute path of the project directory for the current scope.
+      scope_dir     -- The absolute path of the directory in which the scope was created
+                       (eg, the directory from which the emk_<scope name>.py file was loaded).
       local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
                        (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
       current_rule  -- The currently exceuting rule (an emk.Rule instance), or None if a rule is not being executed.
+      
+    Scoped modifiable properties (inherited by child scopes):
+      build_dir       -- The relative path to the build output directory.
+      module_paths    -- Additional absolute paths to search for modules.
+      default_modules -- Modes that are loaded if no emk_rules.py file is present.
+      pre_modules     -- Modules that are preloaded before each emk_rules.py file is loaded.
     """
     
     def __init__(self, args):
@@ -1546,11 +1546,8 @@ class EMK(EMK_Base):
                 self._fix_aliases()
                 self._fix_depends()
                 self._fix_weak_depends()
-            
-                # fix up requires (set up absolute paths, and map to targets)
                 for rule in self._rules:
                     self._fix_requires(rule)
-            
                 self._fix_attached()
                 self._fix_auto_targets()
                 self._fix_requires_rule()
@@ -1692,6 +1689,20 @@ class EMK(EMK_Base):
                 self._weak_dependencies[abspath] = list(fixed_depends)
     
     def attach(self, target, *attached_targets):
+        """
+        Specify a set of targets that must be built if the given attach target is built.
+        
+        This allows you to ensure that if one target is built, the attached targets will also be built.
+        It does not imply any sort of dependency between the targets; the build order of the targets is not affected.
+        
+        You may attach to a target that does not yet exist; you can also attach to a target that has already been built.
+        
+        Arguments:
+          target           -- The target path to attach to. The path may be absolute, or relative to the scope dir.
+                              Project and build dir placeholders will be resolved according to the current scope.
+          attached_targets -- The target paths that must be built if <target> is built. The paths may be absolute, or relative to
+                              the scope dir. Project and build dir placeholders will be resolved based on each path.
+        """
         fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(attached_targets) if d != ""]
         abspath = _make_target_abspath(target, self.scope)
         self.log.debug("Attaching %s to target %s", fixed_depends, abspath)
@@ -1702,12 +1713,39 @@ class EMK(EMK_Base):
                 self._attached_dependencies[abspath] = list(fixed_depends)
     
     def autobuild(self, *targets):
+        """
+        Mark the given targets as autobuild.
+        
+        If no explicit targets are passed in on the command line, EMK will build all targets taht have been
+        marked as atuobuild. EMK will also build all autobuild targets when the explicit targets cannot be
+        fully built due to missing rules or dependencies.
+        
+        Arguments:
+          targets -- The target paths to mark as autobuild. The paths may be absolute, or relative to the scope dir.
+                     Project and build dir placeholders will be resolved according to the current scope.
+        """
         with self._lock:
             for target in _flatten_gen(targets):
                 self.log.debug("Marking %s for automatic build", target)
                 self._auto_targets.add(_make_target_abspath(target, self.scope))
     
     def alias(self, target, alias):
+        """
+        Create an alias for a given target.
+        
+        This allows the target to be referred to by the alias path, potentially making it easier to specify
+        on the command line, or as a dependency.
+
+        If there is an existing alias with the same canonical path, a build error will be raised. If there is an
+        existing rule product with the same path, the alias will be ignored. If a rule product is defined later
+        that has the same path as an existing alias, the alias will be removed.
+        
+        Arguments:
+          target -- The target path to make an alias for. The path may be absolute, or relative to the scope dir.
+                    Project and build dir placeholders will be resolved according to the current scope.
+          alias  -- The alias path to create for the target. The path may be absolute, or relative to the scope dir.
+                    Project and build dir placeholders will be resolved according to the current scope.
+        """
         abs_target = _make_target_abspath(target, self.scope)
         abs_alias = _make_target_abspath(alias, self.scope)
         with self._lock:
@@ -1720,6 +1758,22 @@ class EMK(EMK_Base):
             self._added_rule = True
     
     def require_rule(self, *paths):
+        """
+        Mark the given paths so that they must be produced by a rule (ie, cannot just exist on the filesystem).
+        
+        If there is more than 1 build phase, a rule in phase 1 might be defined as depending on things that are only produced
+        by rules in phase 2 or later (for example). Normally, if a rule depends on a file with no rule to make it, the rule
+        can be run as long as the file exists. However, if that file would be updated by a rule defined in a later build phase,
+        the rule that depends on it should not be run until after that later rule has been defined (and executed, if required).
+        
+        By requiring those dependencies to be produced by a rule, the build process will execute correctly - EMK will wait
+        until the later build phase has defined and executed the rule(s) that produce the dependencies before examining
+        the rules that depend on them.
+        
+        Arguments:
+          paths -- The list of rule product paths to mark as requiring a rule. The paths may be absolute, or relative to
+                   the scope dir. Project and build dir placeholders will be resolved based on each path.
+        """
         with self._lock:
             for path in _flatten_gen(paths):
                 abs_path = _make_require_abspath(path, self.scope)
@@ -1727,37 +1781,118 @@ class EMK(EMK_Base):
                 self._requires_rule.add(abs_path)
     
     def rebuild_if_changed(self, *paths):
+        """
+        Mark the given rule products so that the rule is re-executed if those products have changed,
+        even if the rule's dependencies have not changed.
+        
+        This can be used to ensure that after a build is complete, the given products are always the correct
+        output of the rule, even if the products have been modified after the previous build.
+        
+        Arguments:
+          paths -- The list of rule product paths to mark as "rebuild if changed". The paths may be absolute, or
+                   relative to the scope dir. Project and build dir placeholders will be resolved based on each path.
+        """
         with self._lock:
             for path in _flatten_gen(paths):
-                abs_path = _make_target_abspath(path, self.scope)
+                abs_path = _make_require_abspath(path, self.scope)
                 self.log.debug("Requiring %s to be rebuilt if it has changed", abs_path)
                 self._rebuild_if_changed.add(abs_path)
     
     def recurse(self, *paths):
+        """
+        Specify other directories for EMK to visit.
+        
+        At any time, you may call emk.recurse(path, ...) to specify other directories for EMK to visit.
+        Directories that have already been visited will be ignored (based on the canonical path of the directory).
+        The process for handling a directory os described in emk.run().
+        
+        If emk.recurse() is called when in global, project, or subproj scope, the recurse paths will be inherited
+        by child scopes. Recurse paths will be visited once they are inherited by a rules scope.
+        
+        If emk.recurse() is called when handling a directory, the specified directories will be handled after
+        the current directory has been completely handled. If emk.recurse() is called during the prebuild stage,
+        the directories will be handled after the current prebuild functions have been executed. If emk.recuse()
+        is called at any other time, the specified directories will be handled at the start of the next build phase
+        (after the postbuild functions have been executed).
+        
+        Arguments:
+          paths -- The list of directories to visit. The paths may be absolute, or relative to the scope dir.
+                   Project and build dir placeholders will be resolved according to the current scope.
+        """
         for path in _flatten_gen(paths):
             abspath = _make_target_abspath(path, self.scope)
             self.log.debug("Adding recurse directory %s", abspath)
             self.scope.recurse_dirs.add(abspath)
     
     def subdir(self, *paths):
+        """
+        Specify directories to recurse into, and to be cleaned when the current directory is cleaned.
+        
+        This is a convenience function that calls emk.recurse() on the specifed directory paths, and sets it up so
+        that if "emk clean" is called in the current directory, the clean rules in the specified directories
+        will also be executed.
+        
+        Arguments:
+          paths -- The list of directory paths. The paths may be absolute, or relative to the scope dir.
+                   Project and build dir placeholders will be resolved according to the current scope.
+        """
         self.recurse(paths)
         sub_cleans = [os.path.join(path, "clean") for path in _flatten_gen(paths)]
         self.attach("clean", *sub_cleans)
     
     def do_later(self, func):
+        """
+        Specify a function to execute later in the current build stage. Cannot be called when executing a rule.
+        
+        Functions specified with emk.do_later() are executed at the following points in the build process:
+          * After an emk_global.py, emk_project.py, or emk_subproj.py file has been imported, and any
+            module post_* functions have been executed.
+          * After an emk_rules.py file has been imported, before and module post_rules() functions have been executed.
+          * After all module post_rules() functions have been executed for a given emk_rules.py file.
+          * After each prebuild or postbuild function.
+        If emk.do_later() is called while executing a do_later function, the specified function will be executed after
+        all current do_later functions have been executed.
+        
+        Arguments:
+          func -- The function to execute "later".
+        """
+        if self.building:
+            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            raise _BuildError("Cannot call do_later() when building", stack)
+            
         self.scope._do_later_funcs.append(func)
     
     def do_prebuild(self, func):
+        """
+        Specify a function to execute during the prebuild stage (see emk.run() for a description of the build stages).
+        
+        Prebuild functions are executed after all of the directories that are recursed into have been handled, but before
+        actual building (rule execution) begins. If you specify a prebuild function during the prebuild stage, it will be
+        executed after all of the currently pending prebuild functions have been executed.
+        
+        Arguments:
+          func -- The function to execute.
+        """
         with self._lock:
             self._prebuild_funcs.append((self.scope, func))
     
     def do_postbuild(self, func):
+        """
+        Specify a function to execute during the postbuild stage (see emk.run() for a description of the build stages).
+        
+        Postbuild functions are executed after the build stage of the current build phase (ie, after all rules that could be
+        built (and needed to be) are examined and executed if necessary). If you specify a postbuild function during the 
+        postbuild stage, it will be executed in the next build phase (ie, after the next set of rules are examined).
+        
+        Arguments:
+          func -- The function to execute.
+        """
         with self._lock:
             self._postbuild_funcs.append((self.scope, func))
     
     def mark_virtual(self, *paths):
         """
-        Mark the given paths as virtual.
+        Mark the given paths as virtual. May only be called when a rule is executing.
         
         After a rule is executed, EMK checks to ensure that the rule has generated all of its declared products.
         Products that were marked as virtual by the rule are not expected to exist as actual files. All non-virtual
@@ -1765,7 +1900,7 @@ class EMK(EMK_Base):
         
         Arguments:
           paths -- The list of paths to mark as virtual. The paths may be absolute, or relative to the scope dir.
-                   Project and build dir placeholders will be resolved.
+                   Project and build dir placeholders will be resolved according to the rule scope.
         """
         rule = self.current_rule
         if not rule:
@@ -1787,7 +1922,7 @@ class EMK(EMK_Base):
     
     def mark_untouched(self, *paths):
         """
-        Mark the given paths as untouched.
+        Mark the given paths as untouched. May only be called when a rule is executing.
         
         As a rule is executing, it may discover that some or all of its products do not actually need to be updated.
         In this case, the rule should mark those products as untouched. This will prevent unnecessary execution of
@@ -1798,7 +1933,7 @@ class EMK(EMK_Base):
         
         Arguments:
           paths -- The list of paths to mark as untouched. The paths may be absolute, or relative to the scope dir.
-                   Project and build dir placeholders will be resolved.
+                   Project and build dir placeholders will be resolved according to the rule scope.
         """
         if not self.current_rule:
             self.log.warning("Cannot mark anything as untouched when not in a rule")
