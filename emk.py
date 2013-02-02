@@ -1425,6 +1425,7 @@ class EMK_Base(object):
                     raise _BuildError("Error creating new scope for module %s" % (name), _get_exception_info())
 
                 mod = _Module_Instance(name, instance, d[name].mod)
+                _try_call_method(mod, "load_" + self.scope_name)
                 if weak:
                     self.scope.weak_modules[name] = mod
                 else:
@@ -1447,6 +1448,7 @@ class EMK_Base(object):
 
             instance = self._all_loaded_modules[mpath].Module(self.scope_name)
             mod = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
+            _try_call_method(mod, "load_" + self.scope_name)
             if weak:
                 self.scope.weak_modules[name] = mod
             else:
@@ -1753,6 +1755,7 @@ class EMK(EMK_Base):
             return None
         
         mod = _Module_Instance(name, instance, None)
+        _try_call_method(mod, "load_" + self.scope_name)
         self.scope.weak_modules[name] = mod
         return instance
     
