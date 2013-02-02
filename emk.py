@@ -144,6 +144,27 @@ class _ScopeData(object):
         self._do_later_funcs = []
 
 class _RuleQueue(object):
+    """
+    A threadsafe queue, servicing 1 "special" thread and 0 or more "normal" threads.
+    The special thread is the only thread that is allowed to handle "special" queue items;
+    it may also handle normal queue items. The normal threads only handle normal queue items.
+    
+    Basically this is for handling non-threadsafe rules. Threadsafe rules are "normal" and may be
+    handled by any thread; non-threadsafe rules are "special" and are only handled by the single
+    special thread, so there is only ever one thread controlling the current working directory.
+    
+    It works as a normal threadsafe queue, but with a separate queue for the special items.
+    The special thread checks to see if there are any items on the special queue; if not, it tries to
+    grab an item from the normal queue; if there are no items on the normal queue either then it waits
+    for an item to appear on the special queue.
+    
+    When a new item is added, it is added to the special queue if it is a special item. Otherwise, if
+    the special queue is empty, and the special thread is not currently handling an item, the item is
+    added to the special queue as well. Otherwise the item is added to the normal queue.
+    
+    This allows work to be shared equally among the threads, while still allowing the special items
+    to be handled by only the special thread.
+    """
     def __init__(self, num_threads):
         self.num_threads = num_threads
         self.lock = threading.Lock()
@@ -158,6 +179,7 @@ class _RuleQueue(object):
         self.errors = []
 
         self.tasks = 0
+        self.special_thread_busy = False
 
         self.STOP = object()
 
@@ -166,11 +188,10 @@ class _RuleQueue(object):
             if self.errors:
                 return
             self.tasks += 1
-            if not rule.threadsafe or not len(self.special_queue) or self.num_threads == 1:
+            if not rule.threadsafe or (not len(self.special_queue) and not self.special_thread_busy) or self.num_threads == 1:
                 # not threadsafe, or special queue is empty, so add to special queue
                 self.special_queue.append(rule)
                 self.special_cond.notify()
-
             else:
                 # add to normal queue
                 self.queue.append(rule)
@@ -179,25 +200,30 @@ class _RuleQueue(object):
     def get(self, special):
         with self.lock:
             if self.errors:
-                return self.STOP
+                return self.STOP # stop immediately
             if special:
                 if len(self.special_queue):
-                    return self.special_queue.popleft()
+                    item = self.special_queue.popleft()
                 elif len(self.queue) and not (self.queue[0] is self.STOP):
-                    return self.queue.popleft()
+                    # note that the special thread will only get STOP off of the special queue
+                    item = self.queue.popleft()
                 else:
                     while not len(self.special_queue):
                         self.special_cond.wait()
-                    return self.special_queue.popleft()
+                    item = self.special_queue.popleft()
+                self.special_thread_busy = True
+                return item
             else:
                 while not len(self.queue):
                     self.cond.wait()
                 return self.queue.popleft()
 
-    def done_task(self):
+    def done_task(self, special):
         with self.lock:
             if self.errors:
                 return
+            if special:
+                self.special_thread_busy = False
             self.tasks -= 1
             if self.tasks == 0:
                 self.join_cond.notifyAll()
@@ -228,6 +254,17 @@ class _Container(object):
 
 _clean_log = logging.getLogger("emk.clean")
 class _Clean_Module(object):
+    """
+    Module "clean".
+    
+    The clean module is automatically loaded in every rules scope. It provides the "clean" target,
+    which will delete the build directory for the rules scope if the build directory is a subdirectory
+    of the scope directory (so it won't delete the build directory if it is set to ".." for example).
+    
+    Properties:
+      remove_build_dir -- If True, the clean rule will not delete the build directory. This is inherited
+                          by child scopes.
+    """
     def __init__(self, scope, parent=None):
         if parent:
             self.remove_build_dir = parent.remove_build_dir
@@ -252,9 +289,9 @@ class _Clean_Module(object):
 
 class _Module_Instance(object):
     def __init__(self, name, instance, mod):
-        self.name = name
-        self.instance = instance
-        self.mod = mod
+        self.name = name # module name
+        self.instance = instance # module instance
+        self.mod = mod # python module that was imported
 
 class _Always_Build(object):
     def __repr__(self):
@@ -278,10 +315,20 @@ class _NoStyler(object):
         return self.r.sub('', string)
 
 class _PassthroughStyler(object):
+    """
+    Passthrough styler. Does not modify the EMK style tags in any way.
+    """
     def style(self, string, record):
         return string
         
 class _ConsoleStyler(object):
+    """
+    Console styler. Converts the EMK style tags into ANSI escape codes.
+    
+    Properties:
+      styles -- A dict containing "tag": <escape code> mappings. You may modify this dict to change
+                the output or add additional mappings.
+    """
     def __init__(self):
         self.r = re.compile("\000\001([0-9A-Za-z_]*)\001\000")
         self.styles = {"bold":"\033[1m", "u":"\033[4m", "red":"\033[31m", "green":"\033[32m", "blue":"\033[34m",
@@ -320,6 +367,33 @@ class _ConsoleStyler(object):
         return ''.join(bits)
         
 class _HtmlStyler(object):
+    """
+    HTML styler. Converts the EMK style tags into CSS classes.
+    
+    Each log record (ie, an entire log message) is surrounded by <div class="emk_log emk_$levelname>...<\div>" tags,
+    where the $levelname is debug, info, warning etc. Each EMK style tag is converted into a <span class="emk_$tag">...<\span>,
+    with $tag being the EMK tag string.
+    
+    The characters '<', '>', and '&' are escaped for HTML. Four consecutive spaces will be replaced with four non-breaking spaces
+    for indentation. Newlines in log messages will be repalced with <br>.
+    
+    Using this styler, the EMK output can be inserted into an HTML page with appropriate CSS to make it look fancy.
+    
+    Example CSS:
+      <style type="text/css">
+      div.emk_log {margin: 0.2em 0; font-family: Arial, Helvetica, sans-serif;}
+      div.emk_debug {color:blue;}
+      .emk_warning .emk_logtype {font-weight:bold;}
+      .emk_error .emk_logtype {font-weight:bold; color:red;}
+      .emk_important {font-weight:bold; color:red;}
+      .emk_stderr {color:red;}
+      .emk_u {text-decoration:underline;}
+      .emk_bold {font-weight:bold;}
+      .emk_rule_stack {color:blue;}
+      div.emk_log:nth-child(even) { background-color:#fff; }
+      div.emk_log:nth-child(odd) { background-color:#eee; }
+      </style>
+    """
     def __init__(self):
         self.div_regex = re.compile("\000\001__start__\001\000")
         self.end_div_regex = re.compile("\000\001__end__\001\000" + r'\s*')
@@ -334,6 +408,16 @@ class _HtmlStyler(object):
         return string
 
 class _Formatter(logging.Formatter):
+    """
+    Formatter for EMK log messages.
+    
+    This formatter converts the log levelname to lowercase. If "extra={'adorn':False}" was passed to the log call,
+    the message will be passed to the styler as-is. Otherwise, the format string is interpolated using the log record's __dict__.
+    
+    Properties:
+      format_str -- The format string to use for normal ("adorned") log messages.
+      styler     -- The log styler to use to convert EMK style tags.
+    """
     def __init__(self, format):
         self.format_str = format
         self.styler = _NoStyler()
@@ -359,15 +443,6 @@ def _find_project_dir(path):
         dir, tail = os.path.split(dir)
     return dir
 
-def _mkdirs(path):
-    try:
-        os.makedirs(path)
-    except OSError as e:
-        if e.errno == errno.EEXIST and os.path.isdir(path):
-            pass
-        else:
-            raise
-
 def _try_call_method(mod, name):
     try:
         func = getattr(mod.instance, name)
@@ -382,6 +457,7 @@ def _try_call_method(mod, name):
         raise _BuildError("Error running %s.%s()" % (mod.name, name), _get_exception_info())
 
 def _flatten_gen(args):
+    # generator to convert args into a list of strings
     # args might be a string, or a list containing strings or lists
     global _string_type
     if isinstance(args, (_string_type, _Always_Build)):
@@ -400,6 +476,9 @@ def _get_exception_info():
 
 emk_dev = False
 def _filter_stack(stack):
+    """
+    Filter the given stack to remove leading internal stack frames that are not useful for users.
+    """
     if emk_dev:
         return stack
         
@@ -433,17 +512,29 @@ def _format_decorator_stack(stack):
     return result
 
 def _make_abspath(rel_path, scope):
+    """
+    Make a path absolute, using the scope dir as a base for relative paths.
+    """
     if os.path.isabs(rel_path):
         return rel_path
     return os.path.join(scope.dir, rel_path)
 
 def _make_target_abspath(rel_path, scope):
+    """
+    Return a canonical target path based on the current scope. The proj and build dir placeholders will
+    be replaced according to the current scope.
+    """
     if rel_path.startswith(emk.proj_dir_placeholder):
         rel_path = rel_path.replace(emk.proj_dir_placeholder, scope.proj_dir, 1)
     path = rel_path.replace(emk.build_dir_placeholder, scope.build_dir)
     return os.path.realpath(_make_abspath(path, scope))
 
 def _make_require_abspath(rel_path, scope):
+    """
+    Return an absolute require path based on the current scope. The proj dir placeholder will
+    be replaced according to the current scope; the build dir placeholder will not be replaced until
+    later, in case the build dir for the given path is not yet known.
+    """
     if rel_path is emk.ALWAYS_BUILD:
         return emk.ALWAYS_BUILD
 
@@ -452,6 +543,9 @@ def _make_require_abspath(rel_path, scope):
     return os.path.realpath(_make_abspath(rel_path, scope))
 
 class EMK_Base(object):
+    """
+    Private implementation details of EMK. THe public API is derived from this class.
+    """
     def __init__(self, args):
         global emk_dev
         
@@ -891,6 +985,19 @@ class EMK_Base(object):
             return False
     
     def has_changed_func(self, abs_path, cache, weak=False):
+        """
+        Default function for determining if a rule dependency has changed. Returns True if the file modtime
+        of the dependency differs from the cached value (or if there was no cached value and it is not a weak dependency).
+        
+        Arguments:
+          abs_path -- The absolute path of the dependency to check.
+          cache    -- A dict containing cached information used to determine if the dependency has changed. This should be filled
+                      in with updated information if a change is detected.
+          weak     -- Whether or not this is a weak dependency. If True, it is not an error if the dependency does not exist
+                      (return False), and if there is no cached information about the dependency, False should also be returned.
+                      If False (not a weak dependency), then a build error should be raised if the dependency does not exist,
+                      and if there is no cached information about the dependency (assuming it exists), True should be returned.
+        """
         try:
             modtime = os.path.getmtime(abs_path)
             cached_modtime = cache.get("modtime")
@@ -904,6 +1011,8 @@ class EMK_Base(object):
                 self.log.debug("Modtime for %s has not changed (%s)", abs_path, cached_modtime)
             return False
         except OSError:
+            if weak:
+                return False
             raise _BuildError("Could not get modtime for %s" % (abs_path))
     
     def _get_changed_reqs(self, rule):
@@ -978,7 +1087,7 @@ class EMK_Base(object):
                 self._add_bad_rule(rule)
                 raise
             
-            self._buildable_rules.done_task()
+            self._buildable_rules.done_task(special)
 
     def _do_build(self):
         # if there are explicit targets, see if we have rules for all of them
@@ -1129,26 +1238,33 @@ class EMK_Base(object):
         self._run_do_later_funcs()
     
     def _load_parent_scope(self, path):
+        # the immediate parent scope is stored in every directory that we visit, so we only need to recurse
+        # up the directory tree until we hit a directory we have already seen (or the project dir).
         proj_dir = None
         new_subproj_dirs = []
         parent_scope = self._root_scope
         d = path
         prev = None
-        while d != prev:
+        while d != prev: # iterate until we hit the root directory
             if d in self._stored_subproj_scopes:
+                # found a directory with a cached parent scope
                 parent_scope = self._stored_subproj_scopes[d]
                 break
             if os.path.isfile(os.path.join(d, "emk_subproj.py")):
+                # we will need to load this subproj file later
                 new_subproj_dirs.append((d, True))
             else:
+                # if there is no subproj file, the scope from the parent directory will be propagated down.
                 new_subproj_dirs.append((d, False))
             if os.path.isfile(os.path.join(d, "emk_project.py")):
+                # found project dir, so exit
                 proj_dir = d
                 break
             prev = d
             d, tail = os.path.split(d)
         
         if proj_dir:
+            # load emk_project.py if necessary.
             self._local.current_scope = _ScopeData(self._root_scope, "project", proj_dir, proj_dir)
             
             self._local.current_scope.prepare_do_later()
@@ -1158,13 +1274,17 @@ class EMK_Base(object):
             
             parent_scope = self._local.current_scope
         elif parent_scope is self._root_scope:
+            # no project dir; use root directory
             proj_dir = d
         else:
+            # use cached project dir
             proj_dir = parent_scope.proj_dir
         
+        # Now cache the parent scope for each directory we visited.
         new_subproj_dirs.reverse()
         for d, have_subproj in new_subproj_dirs:
             if have_subproj:
+                # load emk_subproj.py if necessary.
                 self._local.current_scope = parent_scope = _ScopeData(parent_scope, "subproj", d, proj_dir)
             
                 self.scope.prepare_do_later()
@@ -1231,19 +1351,24 @@ class EMK_Base(object):
             
         self.log.info("Entering directory %s", path)
         
+        # First, load the parent scope, and create a rules scope for this directory.
         self._load_parent_scope(path)
         self._local.current_scope = _ScopeData(self._local.current_scope, "rules", path, self._current_proj_dir)
         
+        # Load any preload modules that have been inherited from the parent scope(s).
         self.scope.prepare_do_later()
         self.module(self.scope.pre_modules) # load preload modules
+        # Try to load the emk_rules.py file. If we can't load the default modules instead (if any).
         if not self.import_from([path], "emk_rules"):
             self.module(self.scope.default_modules)
         self._run_do_later_funcs()
         
+        # Run post_rules() (if present) for each module that was loaded into the scope.
         self.scope.prepare_do_later()
         self._run_module_post_functions()
         self._run_do_later_funcs()
         
+        # Store build dir for this directory so we can correctly resolve the build dir placeholder later.
         self._known_build_dirs[path] = self.scope.build_dir
         
         # gather dirs to (potentially) recurse into
@@ -1251,7 +1376,14 @@ class EMK_Base(object):
         self.scope.recurse_dirs = set()
         
         if not self._cleaning:
-            _mkdirs(self.scope.build_dir)
+            try:
+                os.makedirs(self.scope.build_dir)
+            except OSError as e:
+                if e.errno == errno.EEXIST and os.path.isdir(self.scope.build_dir):
+                    pass
+                else:
+                    raise
+        
         if first_dir:
             self._fix_explicit_targets()
         
@@ -1293,7 +1425,6 @@ class EMK_Base(object):
                     raise _BuildError("Error creating new scope for module %s" % (name), _get_exception_info())
 
                 mod = _Module_Instance(name, instance, d[name].mod)
-                _try_call_method(mod, "load_" + self.scope_name)
                 if weak:
                     self.scope.weak_modules[name] = mod
                 else:
@@ -1316,7 +1447,6 @@ class EMK_Base(object):
 
             instance = self._all_loaded_modules[mpath].Module(self.scope_name)
             mod = _Module_Instance(name, instance, self._all_loaded_modules[mpath])
-            _try_call_method(mod, "load_" + self.scope_name)
             if weak:
                 self.scope.weak_modules[name] = mod
             else:
@@ -1560,7 +1690,7 @@ class EMK(EMK_Base):
             
                 self._run_postbuild_funcs()
                 
-                self.log.info("**** End of phase %d ****", self._build_phase)
+                self.log.debug("**** End of phase %d ****", self._build_phase)
                 
                 now = time.time()
                 self._time_lines.append("Phase %d: %0.3f seconds" % (self._build_phase, now - phase_start_time))
@@ -1623,7 +1753,6 @@ class EMK(EMK_Base):
             return None
         
         mod = _Module_Instance(name, instance, None)
-        _try_call_method(mod, "load_" + self.scope.scope_type)
         self.scope.weak_modules[name] = mod
         return instance
     
@@ -1643,16 +1772,81 @@ class EMK(EMK_Base):
             return mods[0]
         return mods
     
-    # 0-length produces and requires ("") are ignored. A require of emk.ALWAYS_BUILD means that this rule must always be built
     def rule(self, func, produces, requires, *args, **kwargs):
+        """
+        Declare an EMK rule.
+        
+        Any function that takes at least two arguments (the list of product paths and the list of requirement paths)
+        can be used in an EMK rule. When the function is executed, it must ensure that all declared products are actually
+        produced (they must be either present in the filesystem, or declared virtual using emk.mark_virtual()). EMK will
+        ensure that all the requirements in the requires list (the primary dependencies) have been built or otherwise exist
+        before the rule function is executed.
+        
+        Rules may be declared as either threadsafe or non-threadsafe (using the threadsafe keyword argument).
+        Threadsafe rules may be executed in parallel and must not depend on the current working directory.
+        Non-threadsafe rules are all executed by a single thread; the current working directory will be set to
+        the scope dir that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
+        
+        Arguments:
+          func     -- The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
+          produces -- List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
+                      Project and build dir placeholders will be resolved according to the current scope. Empty paths ("") are ignored.
+                      This argument will be converted into a list of canonical paths, and passed as the first argument to the rule function.
+          requires -- List of paths that the rule requires to be built before it can be executed (ie, dependencies).
+                      The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
+                      be resolved according to each path. Empty paths ("") are ignored. May include the special
+                      emk.ALWAYS_BUILD token to indicate that the rule should always be executed.
+                      This argument will be converted into a list of canonical paths, and passed as the second argument to the rule function.
+          args     -- Additional arguments that will be passed to the rule function.
+          kwargs   -- Keyword arguments - see below.
+        
+        Keyword arguments:
+          threadsafe       -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+                              
+          ex_safe          -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+                              The warning indicates that the rule was partially executed and may have left partial build products, so
+                              the build should be cleaned. The default value is False.
+          has_changed_func -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
+                              have changed. The default value is emk.has_changed_func.
+        """
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
         threadsafe = kwargs.get("threadsafe", False)
         ex_safe = kwargs.get("ex_safe", False)
         has_changed_func = kwargs.get("has_changed_func", None)
         self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack)
     
-    # decorator for simple rule creation
     def make_rule(self, produces, requires, *args, **kwargs):
+        """
+        Decorator to turn a function into an EMK rule.
+        
+        Any function that takes at least two arguments (the list of product paths and the list of requirement paths)
+        can be turned into an EMK rule using @emk.make_rule(). The functionality is the same as passing 
+        the decorated function as the first argument to emk.rule(), with all other arguments being the same as those
+        passed to the @emk.make_rule() decorator.
+        
+        Arguments:
+          produces -- List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
+                      Project and build dir placeholders will be resolved according to the current scope. Empty paths ("") are ignored.
+                      This argument will be converted into a list of canonical paths, and passed as the first argument to the rule function.
+          requires -- List of paths that the rule requires to be built before it can be executed (ie, dependencies).
+                      The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
+                      be resolved according to each path. Empty paths ("") are ignored. May include the special
+                      emk.ALWAYS_BUILD token to indicate that the rule should always be executed.
+                      This argument will be converted into a list of canonical paths, and passed as the second argument to the rule function.
+          args     -- Additional arguments that will be passed to the rule function.
+          kwargs   -- Keyword arguments - see below.
+        
+        Keyword arguments:
+          threadsafe       -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+                              Threadsafe rules may be executed in parallel. If False, the current working directory will be set to the
+                              scope directory before the rule is executed. Non-threadsafe rules are all executed by a single thread.
+                              The default value is False.
+          ex_safe          -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+                              The warning indicates that the rule was partially executed and may have left partial build products, so
+                              the build should be cleaned. The default value is False.
+          has_changed_func -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
+                              have changed. The default value is emk.has_changed_func.
+        """
         def decorate(func):
             stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
             threadsafe = kwargs.get("threadsafe", False)
@@ -1663,6 +1857,20 @@ class EMK(EMK_Base):
         return decorate
     
     def depend(self, target, *dependencies):
+        """
+        Add secondary dependencies to a target.
+        
+        If EMK determines that a target needs to be built, it will examine the dependencies of the rule that produces
+        that target. The primary dependencies are defined by the "requires" argument when the rule is created. The
+        secondary dependencies of the rule are the set of secodary dependencies of all products of that rule, which are
+        added using emk.depend(). All primary and secondary dependencies of a rule are built by EMK before the rule is executed.
+        
+        Arguments:
+          target       -- The target path to add secondary dependencies for. The path may be absolute, or relative to the scope dir.
+                          Project and build dir placeholders will be resolved according to the current scope.
+          dependencies -- The secondary dependency paths. The paths may be absolute, or relative to the scope dir.
+                          Project and build dir placeholders will be resolved based on each path.
+        """
         fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(dependencies) if d != ""]
         if not fixed_depends:
             return
@@ -1676,6 +1884,23 @@ class EMK(EMK_Base):
                 self._secondary_dependencies[abspath] = list(fixed_depends)
     
     def weak_depend(self, target, *dependencies):
+        """
+        Add weak secondary dependencies to a target.
+        
+        Weak secondary dependencies are treated like normal secondary dependencies, except that:
+          * If a weak secondary dependency does not exist, the rule may still be executed.
+          * If there is no cached information for a weak secondary dependency, the has_changed function
+            for the rule should return False (ie, treat it as if the weak dependency has not changed).
+        
+        This functionality is intended for dependencies that are discovered through examination of the
+        primary dependencies. The driving example is header files for C/C++.
+        
+        Arguments:
+          target       -- The target path to add weak dependencies for. The path may be absolute, or relative to the scope dir.
+                          Project and build dir placeholders will be resolved according to the current scope.
+          dependencies -- The weak dependency paths. The paths may be absolute, or relative to the scope dir.
+                          Project and build dir placeholders will be resolved based on each path.
+        """
         fixed_depends = [_make_require_abspath(d, self.scope) for d in _flatten_gen(dependencies) if d != ""]
         if not fixed_depends:
             return
@@ -1739,6 +1964,8 @@ class EMK(EMK_Base):
         If there is an existing alias with the same canonical path, a build error will be raised. If there is an
         existing rule product with the same path, the alias will be ignored. If a rule product is defined later
         that has the same path as an existing alias, the alias will be removed.
+        
+        Aliases may refer to other aliases. Aliases may also refer to normal files that are not products of any rule.
         
         Arguments:
           target -- The target path to make an alias for. The path may be absolute, or relative to the scope dir.
