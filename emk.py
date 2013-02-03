@@ -1743,23 +1743,63 @@ class EMK(EMK_Base):
         self.log.info("Finished in %0.3f seconds" % (diff))
     
     def import_from(self, paths, name):
+        """
+        Import a Python module from a set of search directories.
+        
+        Finds the module in the given search directories using imp.find_module(). If found, EMK will change
+        the working directory to the directory that the module was found in, import the module, and then
+        return the working directory to its original state. If the module is not found, no error is raised,
+        but None will be returned.
+        
+        Arguments:
+          paths -- A list of paths (relative or absolute) to search for the module in.
+          name  -- The name of the module to load.
+        
+        Returns the loaded Python module, or None if the module could not be found. Raises a BuildError if
+        an exception occurs while importing the module.
+        """
         return self._import_from(paths, name)
     
-    def insert_module(self, name, instance):
-        if self.building:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            raise _BuildError("Cannot call insert_module() when building", stack)
-            
-        if name in self.scope.modules or name in self.scope.weak_modules:
-            self.log.warning("Cannot insert over pre-existing '%s' module", name)
-            return None
-        
-        mod = _Module_Instance(name, instance, None)
-        _try_call_method(mod, "load_" + self.scope_name)
-        self.scope.weak_modules[name] = mod
-        return instance
-    
     def module(self, *names):
+        """
+        Load one or more EMK modules into the current scope.
+        
+        EMK has a module system which allows automatic creation of rules, and easy hierarchical configuration.
+        When a module is loaded into a scope, EMK will check to see if the module is already present in the scope;
+        if it is, then the module instance is returned. Otherwise, EMK will try to find an instance of the module
+        in a parent scope. If a parent instance is found, a new instance is created for the current scope using the
+        parent instance's new_scope() method. This allows the new module instance to inherit configuration values
+        from the parent scope if desired (based on how the module was designed).
+        
+        If the module is not present in any parent scope, EMK will try to load a Python module of the same name from
+        the scope's module search paths (emk.module_paths). Note that the module search paths may be relative;
+        relative paths and project/build dir placeholders are replaced based on the current scope. If the Python
+        module is found, it is imported (if it was not previously imported), with the current working directory
+        set to the directory that the Python module was found in. An EMK module instance is created by calling
+        Module(<current scope name>) on the Python module instance. This can be any callable that returns an
+        EMK module instance, but is usually a class named Module.
+        
+        An EMK module instance must provide a new_scope() method that takes the new scope type, and returns an
+        EMK module instance (potentially the same module instance; it is not required to create a new module instance).
+        In addition, a module instance may provide load_* or post_* methods, where * may be any of the scope types
+        ('global', 'project', 'subproj', or 'rules'). These methods should take no arguments. The load_* method is called
+        when a new module instance is loaded into a scope of the corresponding type (after the new instance is created).
+        The post_* method is called after the corresponding scope has been fully loaded (eg, after the emk_rules.py file
+        has been imported for the rules scope).
+        
+        Modules should only add EMK rules in the post_* methods (or later, if the post_* method uses emk.do_later(),
+        emk.prebuild(), or emk.postbuild()).
+        
+        It is advisable to avoid having a circular dependency between EMK modules (if the modules load each other at import
+        time or when the module isntance is created) since this will probably lead to an infinite loop.
+        
+        Arguments:
+          names -- The list of modules names (or a single name) to load into the current scope.
+        
+        Returns the list of module instances corresponding to the given module names; None will be in the list for each module
+        that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
+        so that you can write 'mymod = emk.module("my_module")', but also write 'c, link = emk.module("c", "link")').
+        """
         mods = []
         for name in _flatten_gen(names):
             mods.append(self._module(name, weak=False))
@@ -1768,12 +1808,61 @@ class EMK(EMK_Base):
         return mods
 
     def weak_module(self, *names):
+        """
+        Load one or EMK modules into the current scope, without causing their post_<scope type>() methods to be called.
+        
+        This is to provide a way to modify the configuration of a module for child scopes, without having each module's
+        post_<scope type>() method called (so the module should not create any rules).
+        
+        Any modules that are also loaded normally (using emk.module()) at any point will have their post_<scope type>()
+        methods called as usual.
+        
+        Arguments:
+          names -- The list of modules names (or a single name) to load into the current scope as weak modules.
+        
+        Returns the list of module instances corresponding to the given module names; None will be in the list for each module
+        that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
+        so that you can write 'mymod = emk.module("my_module")', but also write 'c, link = emk.module("c", "link")').
+        """
         mods = []
         for name in _flatten_gen(names):
             mods.append(self._module(name, weak=True))
         if len(mods) == 1:
             return mods[0]
         return mods
+    
+    def insert_module(self, name, instance):
+        """
+        Insert an EMK module instance into the current scope as a weak module.
+        
+        This method allows you to create a module instance and provide it for use by child scopes without needing to
+        create an actual Python module file to import. The instance will be installed into the current scope as a weak
+        module, so the current scope can also load it using emk.module() if desired after it has been inserted.
+        
+        When the module instance is being inserted, its load_<scope type>() method will be called, if present. If a module
+        instance of the same name already exists in the current scope (either as a normal module or weak module), the insert will
+        be ignored; however you can insert a module that will override a module in any parent scope (or a Python module) as long
+        as the current scope has not yet loaded it.
+        
+        Arguments:
+          name     -- The name of the module being inserted (as would be passed to emk.module())
+          instance -- The module instance to insert.
+        
+        Returns:
+          The inserted module instance, or None if it could not be inserted.
+        """
+        if self.building:
+            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            raise _BuildError("Cannot call insert_module() when building", stack)
+
+        if name in self.scope.modules or name in self.scope.weak_modules:
+            self.log.warning("Cannot insert over pre-existing '%s' module", name)
+            return None
+
+        mod = _Module_Instance(name, instance, None)
+        _try_call_method(mod, "load_" + self.scope_name)
+        self.scope.weak_modules[name] = mod
+        return instance
     
     def rule(self, func, produces, requires, *args, **kwargs):
         """
