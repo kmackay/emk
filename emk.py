@@ -1346,8 +1346,7 @@ class EMK_Base(object):
         try:
             os.chdir(path)
         except OSError:
-            self.log.warning("Failed to change to directory %s", path)
-            return
+            raise _BuildError("Failed to change to directory %s" % path)
             
         self.log.info("Entering directory %s", path)
         
@@ -1470,8 +1469,8 @@ class EMK_Base(object):
     
     def _rule(self, func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack):
         if self.scope_name != "rules":
-            self.log.warning("Cannot create rules when not in 'rules' scope (current scope = '%s')", self.scope_name)
-            return
+            raise _BuildError("Cannot create rules when not in 'rules' scope (current scope = '%s')" % (self.scope_name), stack)
+        
         seen_produces = set([emk.ALWAYS_BUILD])
         fixed_produces = []
         for p in _flatten_gen(produces):
@@ -1490,11 +1489,12 @@ class EMK_Base(object):
             for product in fixed_produces:
                 new_target = _Target(product, new_rule)
                 if new_target.abs_path in self._targets and self._targets[new_target.abs_path].rule:
-                    self.log.warning("Duplicate rule producing %s", new_target.abs_path)
+                    lines = ["Previous rule definition:"] + ["    " + line for line in self._targets[new_target.abs_path].rule.stack]
+                    lines += ["New rule definition:"] + ["    " + line for line in stack]
+                    raise _BuildError("Duplicate rule producing %s" % (new_target.abs_path), lines)
                 else:
                     if new_target.abs_path in self._aliases:
-                        self.log.warning("Alias %s is produced by a rule; removing" % (new_target.abs_path))
-                        del self._aliases[new_target.abs_path]
+                        raise _BuildError("New rule produces %s, which is already an alias for %s" % (new_target.abs_path, self._aliases[new_target.abs_path]))
 
                     self.log.debug("Adding target %s <= %s", new_target.abs_path, fixed_requires)
                     self._targets[new_target.abs_path] = new_target
@@ -1840,9 +1840,9 @@ class EMK(EMK_Base):
         module, so the current scope can also load it using emk.module() if desired after it has been inserted.
         
         When the module instance is being inserted, its load_<scope type>() method will be called, if present. If a module
-        instance of the same name already exists in the current scope (either as a normal module or weak module), the insert will
-        be ignored; however you can insert a module that will override a module in any parent scope (or a Python module) as long
-        as the current scope has not yet loaded it.
+        instance of the same name already exists in the current scope (either as a normal module or weak module), a build
+        error will be raised; however you can insert a module that will override a module in any parent scope (or a Python module)
+        as long as the current scope has not yet loaded it.
         
         Arguments:
           name     -- The name of the module being inserted (as would be passed to emk.module())
@@ -1851,13 +1851,12 @@ class EMK(EMK_Base):
         Returns:
           The inserted module instance, or None if it could not be inserted.
         """
+        stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
         if self.building:
-            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
             raise _BuildError("Cannot call insert_module() when building", stack)
 
         if name in self.scope.modules or name in self.scope.weak_modules:
-            self.log.warning("Cannot insert over pre-existing '%s' module", name)
-            return None
+            raise _BuildError("Cannot insert '%s' module since it has already been loaded into the current scope", stack)
 
         mod = _Module_Instance(name, instance, None)
         _try_call_method(mod, "load_" + self.scope_name)
@@ -1878,6 +1877,8 @@ class EMK(EMK_Base):
         Threadsafe rules may be executed in parallel and must not depend on the current working directory.
         Non-threadsafe rules are all executed by a single thread; the current working directory will be set to
         the scope dir that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
+        
+        It is a build error to declare more than one rule that produces the same target.
         
         Arguments:
           func     -- The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
@@ -2053,9 +2054,8 @@ class EMK(EMK_Base):
         This allows the target to be referred to by the alias path, potentially making it easier to specify
         on the command line, or as a dependency.
 
-        If there is an existing alias with the same canonical path, a build error will be raised. If there is an
-        existing rule product with the same path, the alias will be ignored. If a rule product is defined later
-        that has the same path as an existing alias, the alias will be removed.
+        If there is an existing alias with the same canonical path, or a rule is ever declared to produce a target
+        with the same path, a build error will be raised.
         
         Aliases may refer to other aliases. Aliases may also refer to normal files that are not products of any rule.
         
