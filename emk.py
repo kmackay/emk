@@ -870,9 +870,7 @@ class EMK_Base(object):
         paths = [t.abs_path for t in rule.produces]
         paths.sort()
         rule._key = key = hashlib.md5('\0'.join(paths)).hexdigest()
-        cache = rule.scope._cache.get(key)
-        if cache is None:
-            rule.scope._cache[key] = cache = {}
+        cache = rule.scope._cache.setdefault(key, {})
         rule._cache = cache
     
     def _toplevel_examine_target(self, target):
@@ -944,9 +942,7 @@ class EMK_Base(object):
                 changed = False
             
             if virtual and not changed:
-                modtime = cache.get("vmodtime")
-                if modtime is None:
-                    cache["vmodtime"] = modtime = 0
+                modtime = cache.setdefault("vmodtime", 0)
                 t._virtual_modtime = modtime
         
             t._built = True
@@ -2281,10 +2277,7 @@ class EMK(EMK_Base):
         """
         rule = self.current_rule
         if rule:
-            cache = rule._cache.get(key)
-            if cache is None:
-                rule._cache[key] = cache = {}
-            return cache
+            return rule._cache.setdefault(key, {})
         return None
     
     def abspath(self, path):
