@@ -544,7 +544,7 @@ def _make_require_abspath(rel_path, scope):
 
 class EMK_Base(object):
     """
-    Private implementation details of EMK. THe public API is derived from this class.
+    Private implementation details of EMK. The public API is derived from this class.
     """
     def __init__(self, args):
         global emk_dev
@@ -1614,7 +1614,7 @@ class EMK(EMK_Base):
           9. Recurse into any specified dirs that have not already been visited.
         
         Once there are no more directories to recurse into, the prebuild functions are executed until there aren't any more.
-        Prebuild functions specified during the prebuild phase are executed after all of the previous prebuild functions
+        Prebuild functions specified during the prebuild stage are executed after all of the previous prebuild functions
         have been executed.
         
         Then, the first build phase starts. If explicit targets have been specified and they can all be resolved, only those
@@ -1627,10 +1627,10 @@ class EMK(EMK_Base):
         not yet been declared. EMK will attempt to build those targets later.
         
         Once building is complete, the postbuild functions are executed. Note that if new postbuild functions are added during
-        the postbuild phase, they will not be executed until after the next build phase.
+        the postbuild stage, they will not be executed until after the next build phase.
         
         Finally, any new directories are recursed into. If there is still work left to do (ie, unbuilt targets), EMK will start
-        a new build phase (returning to the prebuild step). Build phases will continue until all targets are built, or until
+        a new build phase (returning to the prebuild stage). Build phases will continue until all targets are built, or until
         there is nothing left to do. If there are unbuilt targets after building has stopped, a build error is raised.
         
         Arguments:
