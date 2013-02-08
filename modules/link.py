@@ -460,6 +460,8 @@ class Module(object):
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
+            if self.strip:
+                self.linker.strip(produces[0])
         except:
             utils.rm(produces[0])
             raise
@@ -489,6 +491,8 @@ class Module(object):
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
+            if self.strip:
+                self.linker.strip(produces[0])
         except:
             utils.rm(produces[0])
             raise
