@@ -9,7 +9,43 @@ log = logging.getLogger("emk.link")
 utils = emk.module("utils")
 
 class _GccLinker(object):
+    """
+    Linker class for using gcc/g++ to link.
+    
+    In order for the EMK link module to use a linker instance, the linker class must define the following methods:
+      contains_main_function
+      create_static_lib
+      static_lib_threadsafe
+      shlib_opts
+      exe_opts
+      do_link
+      link_threadsafe
+      strip
+    See the documentation for those functions in this class for more details.
+    
+    Properties (defaults set based on the path prefix passed to the constructor):
+      c_path     -- The path of the C linker (eg "gcc").
+      cxx_path   -- The path of the C++ linker (eg "g++").
+      ar_path    -- The path of the archive tool to create static libs (eg "ar").
+      strip_path -- The path of the strip tool to remove unnecessary symbols (eg "strip").
+      nm_path    -- The path of the nm tool to read the symbol table from an object file (eg "nm").
+      
+      main_nm_regex -- The compiled regex to use to search for a main() function in the nm output. The default value
+                       looks for a line ending in " T _main". For mingw64 building for 64-bit, you probably want something
+                       like 're.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)'. For mingw64 building for 32-bit, you
+                       want something like 're.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)'.
+    """
     def __init__(self, path_prefix=""):
+        """
+        Create a new GccLinker instance.
+        
+        Arguments:
+          path_prefix -- The prefix to use for the various binutils executables (gcc, g++, ar, strip, nm).
+                         For example, if you had a 32-bit Linux cross compiler installed into /cross/linux,
+                         you might use 'link.linker = link.GccLinker("/cross/linux/bin/i686-pc-linux-gnu-")'
+                         to configure the link module to use the cross binutils. The default value is ""
+                         (ie, use the system binutils).
+        """
         self.path_prefix = path_prefix
         self.c_path = path_prefix + "gcc"
         self.cxx_path = path_prefix + "g++"
@@ -20,19 +56,58 @@ class _GccLinker(object):
         self.main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
     
     def contains_main_function(self, objfile):
+        """
+        Determine if an object file contains a main() function.
+        
+        This is used by the link module to autodetect which object files should be linked into executables.
+        
+        Arguments:
+          objfile -- The path to the object file.
+        
+        Returns True if the object file contains a main() function, False otherwise.
+        """
         out, err, code = utils.call(self.nm_path, "-g", objfile, print_call=False)
         if self.main_nm_regex.search(out):
             return True
         return False
         
     def extract_static_lib(self, lib, dest_dir):
+        """
+        Extract all contents of a static library to the given directory.
+        
+        Arguments:
+          lib      -- The static library to extract from.
+          dest_dir -- The directory to extract into.
+        """
         log.info("Extracting lib %s", lib)
         utils.call(self.ar_path, "x", lib, print_call=False, cwd=dest_dir)
     
     def add_to_static_lib(self, dest, objs):
+        """
+        Add some object files to a static library.
+        
+        If the library does not already exist, it will be created.
+        
+        Arguments:
+          dest -- The path to the static library.
+          objs -- A list of paths to object files to add to the static library.
+        """
         utils.call(self.ar_path, "r", dest, objs)
     
     def create_static_lib(self, dest, source_objs, other_libs):
+        """
+        Create a static library (archive) containing the given object files and all object files contained in
+        the given other libs (which will be static libraries as well).
+        
+        Called by the link moduel to create a static library. If the link modules 'lib_in_lib' property is True,
+        the link module will pass in the library dependencies of this library in the 'other_libs' argument. This
+        method must include the contents of all the other libraries in the generated static library.
+        
+        Arguments:
+          dest        -- The path of the static library to generate.
+          source_objs -- A list of paths to object files to include in the generated static library.
+          other_libs  -- A list of paths to other static libraries whose contents should be included in the generated static library.
+        """
         objs = list(source_objs)
         dump_dir = os.path.join(emk.scope_dir, emk.build_dir, "__lib_temp__")
         utils.mkdirs(dump_dir)
@@ -55,6 +130,7 @@ class _GccLinker(object):
         
         utils.rm(dest)
         
+        # we add files to the archive 32 at a time to avoid command-line length restriction issues.
         left = len(objs)
         start = 0
         while left > 32:
@@ -66,21 +142,51 @@ class _GccLinker(object):
         self.add_to_static_lib(dest, cur_objs)
     
     def static_lib_threadsafe(self):
+        """
+        Returns True if creating a static library using the create_static_lib() method is threadsafe (ie, does not
+        use anything that depends on the current working directory); returns False otherwise.
+        """
         return True
     
     def shlib_opts(self):
+        """
+        Returns a list of options that the link module should use when linking a shared library.
+        """
         return ["-shared"]
     
     def exe_opts(self):
+        """
+        Returns a list of options that the link module should use when linking an executable.
+        """
         return []
     
     def link_cmd(self, cmd, flags, dest, objs, abs_libs, lib_dirs, libs):
+        """
+        Set up and call the linker.
+        """
         sg = "-Wl,--start-group"
         eg = "-Wl,--end-group"
         call = [cmd] + flags + ["-o", dest] + objs + [sg] + abs_libs + [eg] + lib_dirs + [sg] + libs + [eg]
         utils.call(call)
 
-    def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode=False):
+    def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode):
+        """
+        Link a shared library or executable.
+        
+        The link module does not order the libraries to be linked in, so this method must ensure that any ordering
+        dependencies are solved. The GCC linker uses the '--start-group' and '--end-group' options to make sure
+        that library ordering is not an issue; the documentation says that this can be slow but in reality
+        it makes very little difference.
+        
+        Arguments:
+          dest        -- The path of the destination file to produce.
+          source_objs -- A list of object files to link in.
+          abs_libs    -- A list of absolute paths to (static) libraries that should be linked in.
+          lib_dirs    -- Additional search paths for relative libraries.
+          rel_libs    -- Relative library names to link in.
+          flags       -- Additional flags to be passed to the linker.
+          cxx_mode    -- If True, then the object files or libraries contain C++ code (so use g++ to link, for example).
+        """
         linker = self.c_path
         if cxx_mode:
             linker = self.cxx_path
@@ -93,18 +199,39 @@ class _GccLinker(object):
         self.link_cmd(linker, flat_flags, dest, source_objs, abs_libs, lib_dir_flags, rel_lib_flags)
     
     def link_threadsafe(self):
+        """
+        Returns True if linking a shared library or executable using the do_link() method is threadsafe (ie, does not
+        use anything that depends on the current working directory); returns False otherwise.
+        """
         return True
         
     def strip(self, path):
+        """
+        Strip unnecessary symbols from the given shared library / executable. Called by the link module after linking
+        if its 'strip' property is True.
+        
+        Arguments:
+          path -- The path of the file to strip.
+        """
         utils.call(self.strip_path, "-S", "-x", path)
 
 class _OsxGccLinker(_GccLinker):
+    """
+    A subclass of GccLinker for linking on OS X.
+    
+    Properties:
+      lipo_path    -- The path of the 'lipo' executable.
+      libtool_path -- The path of the 'libtool' executable.
+    """
     def __init__(self, path_prefix=""):
         super(_OsxGccLinker, self).__init__(path_prefix)
         self.lipo_path = self.path_prefix + "lipo"
         self.libtool_path = self.path_prefix + "libtool"
     
     def extract_static_lib(self, lib, dest_dir):
+        """
+        Extract a static library to the given directory, handling fat files properly.
+        """
         log.info("Extracting lib %s", lib)
         out, err, ret = utils.call(self.lipo_path, "-info", lib, print_call=False)
         if "is not a fat file" in out:
@@ -128,6 +255,9 @@ class _OsxGccLinker(_GccLinker):
                 utils.call(cmd, print_call=False)
 
     def add_to_static_lib(self, dest, objs):
+        """
+        Add object files to a static library, handling fat files properly.
+        """
         cmd = [self.libtool_path, "-static", "-s", "-o", dest, "-"]
         if os.path.isfile(dest):
             cmd.append(dest)
@@ -135,9 +265,16 @@ class _OsxGccLinker(_GccLinker):
         utils.call(cmd)
 
     def shlib_opts(self):
+        """
+        Linker options to build a shared library (dylib) on OS X.
+        """
         return ["-dynamiclib"]
     
     def link_cmd(self, cmd, flags, dest, objs, abs_libs, lib_dirs, libs):
+        """
+        The actual linker call to use on OS X. Note that we don't need '--start-group'/'--end-group' on OS X
+        because the OS X linker will search all libraries to resolve symbols, regardless of order.
+        """
         call = [cmd] + flags + ["-o", dest] + objs + abs_libs + lib_dirs + libs
         utils.call(call)
         

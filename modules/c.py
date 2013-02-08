@@ -10,11 +10,15 @@ class _GccCompiler(object):
     """
     Compiler class for using gcc/g++ to compile C/C++ respectively.
     
-    In order for the EMK c module to use a compiler instance, the compiler must define the following methods:
+    In order for the EMK c module to use a compiler instance, the compiler class must define the following methods:
       load_extra_dependencies
       compile_c
       compile_cxx
     See the documentation for those functions in this class for more details.
+    
+    Properties (defaults set based on the path prefix passed to the constructor):
+      c_path   -- The path of the C compiler (eg "gcc").
+      cxx_path -- The path of the C++ compiler (eg "g++").
     """
     def __init__(self, path_prefix=""):
         """
@@ -36,8 +40,7 @@ class _GccCompiler(object):
         Arguments:
           path -- The path to the dependnecy file.
         
-        Returns:
-          A list of paths (strings) of all the extra dependencies.
+        Returns a list of paths (strings) of all the extra dependencies.
         """
         try:
             with open(path) as f:
@@ -48,7 +51,7 @@ class _GccCompiler(object):
     
     def depfile_args(self, dep_file):
         """
-        Return a list of arguments to write secondary dependencies to the given dep_file path.
+        Returns a list of arguments to write secondary dependencies to the given dep_file path.
         """
         return ["-Wp,-MMD,%s" % (dep_file)]
     
@@ -111,6 +114,17 @@ class _GccCompiler(object):
 class Module(object):
     """
     EMK module for compiling C and C++ code. Depends on the link module.
+    
+    This module defines EMK rules during the prebuild stage, to allow autodiscovery of generated source files
+    from rules defined before the prebuild stage (ie, in the post_rules() method of other modules). See the
+    autodetect and autodetect_from_targets properties for more information about autodiscovery of source files.
+    
+    This module adds the compiled object files to the link module, which will link them into libraries/executables as desired.
+    The object files are added to the link module's 'objects' property (each mapped to the source file that the object file
+    was built from), so that the link module can autodetect main() functions from the source (if link.detect_exe == "simple").
+    See the link module documentation for details of main() autodetection.
+    
+    The c module also sets the link module's link_cxx flag if there are any C++ source files being compiled.
     
     Classes:
       GccCompiler - A compiler class that uses gcc/g++ to compile.
