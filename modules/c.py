@@ -113,7 +113,7 @@ class _GccCompiler(object):
 
 class Module(object):
     """
-    EMK module for compiling C and C++ code. Depends on the link module.
+    EMK module for compiling C and C++ code. Depends on the link module (and utils).
     
     This module defines EMK rules during the prebuild stage, to allow autodiscovery of generated source files
     from rules defined before the prebuild stage (ie, in the post_rules() method of other modules). See the
@@ -126,8 +126,11 @@ class Module(object):
     
     The c module also sets the link module's link_cxx flag if there are any C++ source files being compiled.
     
+    Note that the compilation rules are not built automatically; the link module (or other modules/user code)
+    is responsible for marking the object files as autobuild if desired.
+    
     Classes:
-      GccCompiler - A compiler class that uses gcc/g++ to compile.
+      GccCompiler -- A compiler class that uses gcc/g++ to compile.
     
     Properties (inherited from parent scope):
       compiler     -- The compiler instance that is used to load dependencies and compile C/C++ code.

@@ -282,20 +282,133 @@ link_cache = {}
 need_depdirs = {}
 
 class Module(object):
+    """
+    EMK module for linking compiled code (ie, .o files) into libraries/executables. Depends on the utils module.
+    
+    This module defines EMK rules during the second prebuild stage, so that the c module's prebuild step is executed
+    before any link rules are defined. Future modules that create linkable files (eg assembler?) could work in a similar manner
+    to the c module, adding to the link.objects dict during the prebuild stage.
+    
+    By default, the link module will autodetect object files that contain a main() function; those object files will
+    each be linked into an executable. The other files (that do not contain main()) are linked into a static library,
+    which is used when linking the executables. You may specify dependencies on other directories managed by EMK
+    (in the same project or a different proeject); the static libraries from those directories will be linked in as well.
+    
+    You can also build a shared library instead of or in addition to the static library. Note that on many platforms,
+    the object files linked into a shared library must be compiled as position independent code (eg '-fPIC' or '-fpic' with gcc).
+    You must configure the necessary flags in the c module for this to work.
+    
+    By default, the main() function detection occurs after the object files have been generated. This is to allow
+    inspection of the symbols in the object files to see if they export a main() function - this is much faster
+    and more exact than trying to parse the source code. One side effect of this is that the link module's
+    rules are (by default) executed in the second build phase. If this is undesirable for some reason, you can
+    configure the link module to do "simple" main() detection (by parsing the source code) by setting the
+    'detect_exe' property to "simple". If this is set (or if main() detection is disabled entirely), the link rules
+    will be defined and executed in the first build phase.
+    
+    The link module will always define rules creating the "link.__static_lib__" and "link.__exes__" targets.
+    "link.__static_lib__" depends on the static library being generated (or nothing, if there is no static library to generate).
+    "link.__exes__" depends on all executables being linked. If a shared library is being created, the link module will
+    define a rule for "link.__shared_lib__" that depends on the shared library.
+    
+    If the 'detect_exe' property is set to "exact", then the link module defines an autobuild rule for "link.__interim__"
+    which depends on all object files. This will cause all object files to be built if required in the first build phase,
+    so that main() detection can occur in postbuild.
+    
+    Classes:
+      GccLinker    -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
+      OsxGccLinker -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
+    
+    Properties (inherited from parent scope):
+      comments_regex      -- The regex to use to match (and ignore) comments when using "simple" main() detection.
+      main_function_regex -- The regex to use to detect a main() function when using "simple" main() detection.
+      
+      linker         -- The linker instance used to link executables / shared libraries, and to create static libraries.
+                        This is set to link.GccLinker() by default on Linux, and link.OsxGccLinker() by default on OS X.
+      shared_lib_ext -- The extension to use for shared libraries. The default is ".so" on Linux, and ".dylib" on OS X.
+      static_lib_ext -- The extension for static libraries. Set to ".a" by default.
+      exe_ext        -- The extension to use for exectuables. Set to "" (empty string) by default.
+      lib_prefix     -- The prefix to use for static/shared libraries. Set to "lib" by default.
+      
+      shared_libname -- The name to use for the generated shared library (if any). If set to None, the library name will
+                        be <lib_prefix><current directory name><shared_lib_ext>. The default value is None.
+      static_libname -- The name to use for the generated lib_in_lib static library (if any). If set to None, the library name will
+                        be <lib_prefix><current directory name>_all<static_lib_ext>. The default value is None.
+                        Note that the regular static library (not lib_in_lib) is always named <lib_prefix><current directory name><static_lib_ext>.
+      
+      detect_exe      -- The method to use for executable detection (ie, if an object file exports a main() function).
+                         If set to "exact", the link module uses the linker instance's 'contains_main_function' method
+                         to determine if each object file contains a main() function. If set to "simple", the link module
+                         will use the comments_regex and main_function_regex to determine if the source file that generated
+                         each object file contains a main() function (note that this only applies to object files for which
+                         the source is known, ie the contents of the 'objects' dict). If set to False/None, then no automatic
+                         detection of executables will be performed. The default value is "exact".
+      link_cxx        -- If True, the link module will tell the linker instance to link C++ code. If False, the link will be done
+                         for C code. The default value is False, but may be set to True by the c module if any C++ source files
+                         are detected. Note that C++ mode will be used for linking if any of the library dependencies (from the
+                         'depdirs' and 'projdirs' properties) contain C++ code.
+      make_static_lib -- Whether or not to create a static library containing the non-executable object files.
+                         The default value is True.
+      make_shared_lib -- Whether or not to create a shared library containing the non-executable files (linked with all library dependencies).
+                         The default value is False.
+      strip           -- Whether or not to strip the resulting shared library and/or executables. The default value is False.
+      lib_in_lib      -- If True (and a static library is being created), the link module will create an additional static library
+                         named <lib_prefix><current directory name>_all<static_lib_ext> (or <static_libname>, if set) which
+                         contains the local library contents as well as the contents of all library dependencies from 'local_static_libs',
+                         and transitively all 'static_libs', 'depdirs', and 'projdirs' libraries - ie the link module will recursively
+                         gather all the static library dependencies from all the dependency directories. Useful for generating a
+                         single static library for release that contains all of its dependencies.
+      
+      exe_objs     -- A list of object files to link into executables (without checking whether they contain a main() function).
+      non_exe_objs -- A list of object files that should not be linked into an executable, even if they contain a main() function.
+      objects      -- A dict mapping <object file>: <source file>. This allows the link module to determine which source file
+                      was compiled to each object file when "simple" main detection is being used. Filled in by the c module.
+      obj_nosrc    -- A list of object files for which the source file is not known.
+      non_lib_objs -- A list of object files which should not be linked into a library (static or shared).
+      
+      depdirs      -- A list of directories that the object files in this directory depend on. The link module will instruct EMK
+                      to recurse into these directories. When linking, the flags, static libs, and syslibs from these directory
+                      dependencies will be included in the link (including any from depdirs of the depdirs, and so on - the flags
+                      and libs are gathered transitively). It is acceptable to have circular dependencies in the depdirs.
+      projdirs     -- A list of dependency directories (like depdirs) that are resolved relative to the project directory.
+      
+      static_libs        -- A list of paths to static libraries to link in (transitively included by links that depend on this directory).
+                            Relative paths will be resolved relative to the current scope.
+      local_static_libs  -- A list of paths to static libraries to link in; not transitively included.
+                            Relative paths will be resolved relative to the current scope.
+      syslibs            -- A list of library names to link in (like '-l<name.'). Transitively included by links that depend on this directory.
+      local_syslibs      -- A list of library names to link in; not transitively included.
+      syslib_paths       -- A list of directories to search for named libraries (ie syslibs). Transitively included by links that depend on this directory.
+                            Relative paths will be resolved relative to the current scope.
+      local_syslib_paths -- A list of directories to search for named libraries; not transitively included.
+                            Relative paths will be resolved relative to the current scope.
+      
+      flags          -- A list of additional flags to pass to the linker (transitively included by links that depend on this directory).
+      local_flags    -- A list of additional flags to pass to the linker; not transitively included.
+      libflags       -- A list of additional flags to pass to the linker when linking a shared library. Transitively included by links
+                        that depend on this directory.
+      local_libflags -- A list of additional flags to pass to the linker when linking a shared library; not transitively included.
+      exeflags       -- A list of additional flags to pass to the linker when linking an executable. Transitively included by links
+                        that depend on this directory.
+      local_exeflags -- A list of additional flags to pass to the linker when linking an executable; not transitively included.
+    """
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
         self.OsxGccLinker = _OsxGccLinker
-        
-        self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
-        self.main_function_regex = re.compile(r'int\s+main\s*\(')
         
         self._all_depdirs = set()
         self._depended_by = set()
         self._all_static_libs = set()
         self._static_libpath = None
         self._syslib_paths = set()
+        self._local_syslib_paths = set()
+        self._static_libs = set()
+        self._local_static_libs = set()
         
         if parent:
+            self.comments_regex = parent.comments_regex
+            self.main_function_regex = parent.main_function_regex
+            
             self.linker = parent.linker
             
             self.shared_lib_ext = parent.shared_lib_ext
@@ -319,21 +432,26 @@ class Module(object):
             self.obj_nosrc = list(parent.obj_nosrc)
             self.non_lib_objs = list(parent.non_lib_objs)
             
+            self.depdirs = list(parent.depdirs)
+            self.projdirs = list(parent.projdirs)
+            
+            self.static_libs = list(parent.static_libs)
+            self.local_static_libs = list(parent.local_static_libs)
+            self.syslibs = list(parent.syslibs)
+            self.local_syslibs = list(parent.local_syslibs)
+            self.syslib_paths = list(parent.syslib_paths)
+            self.local_syslib_paths = list(parent.local_syslib_paths)
+            
             self.flags = list(parent.flags)
             self.local_flags = list(parent.local_flags)
             self.libflags = list(parent.libflags)
             self.local_libflags = list(parent.local_libflags)
             self.exeflags = list(parent.exeflags)
             self.local_exeflags = list(parent.local_exeflags)
-            
-            self.static_libs = list(parent.static_libs)
-            self.local_static_libs = list(parent.local_static_libs)
-            
-            self.depdirs = list(parent.depdirs)
-            self.projdirs = list(parent.projdirs)
-            self.syslibs = list(parent.syslibs)
-            self.syslib_paths = list(parent.syslib_paths)
         else:
+            self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
+            self.main_function_regex = re.compile(r'int\s+main\s*\(')
+            
             if sys.platform == "darwin":
                 self.linker = _OsxGccLinker()
                 self.shared_lib_ext = ".dylib"
@@ -360,20 +478,22 @@ class Module(object):
             self.obj_nosrc = []
             self.non_lib_objs = []
             
+            self.depdirs = []
+            self.projdirs = []
+            
+            self.static_libs = []
+            self.local_static_libs = []
+            self.syslibs = []
+            self.local_syslibs = []
+            self.syslib_paths = []
+            self.local_syslib_paths = []
+            
             self.flags = []
             self.local_flags = []
             self.libflags = []
             self.local_libflags = []
             self.exeflags = []
             self.local_exeflags = []
-            
-            self.static_libs = []
-            self.local_static_libs = []
-            
-            self.depdirs = []
-            self.projdirs = []
-            self.syslibs = []
-            self.syslib_paths = []
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -394,12 +514,15 @@ class Module(object):
         global need_depdirs
         
         self._syslib_paths = set([emk.abspath(d) for d in self.syslib_paths])
+        self._local_syslib_paths = set([emk.abspath(d) for d in self.local_syslib_paths])
+        self._static_libs = set([emk.abspath(lib) for lib in self.static_libs])
+        self._local_static_libs = set([emk.abspath(lib) for lib in self.local_static_libs])
         
         for d in self.projdirs:
             self.depdirs.append(os.path.join(emk.proj_dir, d))
         self.projdirs = []
 
-        self._all_static_libs.update(self.static_libs)
+        self._all_static_libs.update(self._static_libs)
         
         for d in set(self.depdirs):
             abspath = emk.abspath(d)
@@ -558,13 +681,13 @@ class Module(object):
         if lib_in_lib:
             if self._static_libpath:
                 other_libs.add(emk.abspath(self._static_libpath))
-            other_libs |= set(self.local_static_libs)
-            other_libs |= set(self.static_libs)
+            other_libs |= self._local_static_libs
+            other_libs |= self._static_libs
             for d in self._all_depdirs:
                 cache = link_cache[d]
                 if cache._static_libpath:
                     other_libs.add(os.path.join(d, cache._static_libpath))
-                other_libs |= set(cache.static_libs)
+                other_libs |= cache._static_libs
         else:
             objs = requires
         
@@ -579,9 +702,9 @@ class Module(object):
         
         flags = self.linker.shlib_opts() + self.local_flags + self.flags + self.local_libflags + self.libflags
 
-        abs_libs = set(self.local_static_libs) | set(self.static_libs)
-        syslibs = set(self.syslibs)
-        lib_paths = self._syslib_paths.copy()
+        abs_libs = self._local_static_libs | self._static_libs
+        syslibs = set(self.local_syslibs) | set(self.syslibs)
+        lib_paths = self._syslib_paths | self._local_syslib_paths
         link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
@@ -590,7 +713,7 @@ class Module(object):
             flags += cache.libflags
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
-            abs_libs |= set(cache.static_libs)
+            abs_libs |= cache._static_libs
             syslibs |= set(cache.syslibs)
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
@@ -608,11 +731,11 @@ class Module(object):
         
         flags = self.linker.exe_opts() + self.local_flags + self.flags + self.local_exeflags + self.exeflags
 
-        abs_libs = set(self.local_static_libs) | set(self.static_libs)
+        abs_libs = self._local_static_libs | self._static_libs
         if self._static_libpath:
             abs_libs.add(emk.abspath(self._static_libpath))
-        syslibs = set(self.syslibs)
-        lib_paths = self._syslib_paths.copy()
+        syslibs = set(self.local_syslibs) | set(self.syslibs)
+        lib_paths = self._syslib_paths | self._local_syslib_paths
         link_cxx = self.link_cxx
         
         for d in self._all_depdirs:
@@ -621,7 +744,7 @@ class Module(object):
             flags += cache.exeflags
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
-            abs_libs |= set(cache.static_libs)
+            abs_libs |= cache._static_libs
             syslibs |= set(cache.syslibs)
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
