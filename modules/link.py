@@ -315,6 +315,9 @@ class Module(object):
     which depends on all object files. This will cause all object files to be built if required in the first build phase,
     so that main() detection can occur in postbuild.
     
+    For an object file <name>.o that is being linked into an executable, the generated executable path will be <build dir>/<name><link.exe_ext>
+    (note that the 'exe_ext' property is "" by default).
+    
     Classes:
       GccLinker    -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
       OsxGccLinker -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
