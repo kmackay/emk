@@ -73,7 +73,7 @@ class _Rule(object):
       ex_safe    -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
                     a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
       has_changed_func -- The function to execute to determine if a requirement or product has changed. Uses emk.has_changed_func by default.
-                          The function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+                          The function signature should be "def has_changed_func(abs_path, cache):".
                           
       stack      -- The stack of where the rule was defined (a list of strings).
     
@@ -961,38 +961,35 @@ class EMK_Base(object):
             with self._lock:
                 self._bad_rules.append(rule)
     
-    def _req_has_changed(self, rule, req, cache, weak):
+    def _req_has_changed(self, rule, req, cache):
         if req.abs_path is self.ALWAYS_BUILD:
             return True
             
         virtual_modtime = req._virtual_modtime
         if virtual_modtime is None:
-            return rule.has_changed_func(req.abs_path, cache, weak)
+            return rule.has_changed_func(req.abs_path, cache)
         else:
             cached_modtime = cache.get("vmodtime")
             if cached_modtime != virtual_modtime:
                 self.log.debug("Modtime (virtual) for %s has changed; cached = %s, actual = %s", req.abs_path, cached_modtime, virtual_modtime)
                 cache["vmodtime"] = virtual_modtime
-                if weak and cached_modtime is None:
-                    return False
                 return True
             else:
                 self.log.debug("Modtime (virtual) for %s has not changed (%s)", req.abs_path, cached_modtime)
             return False
     
-    def has_changed_func(self, abs_path, cache, weak=False):
+    def has_changed_func(self, abs_path, cache):
         """
         Default function for determining if a rule dependency has changed. Returns True if the file modtime
-        of the dependency differs from the cached value (or if there was no cached value and it is not a weak dependency).
+        of the dependency differs from the cached value, or if there is no cached value. Returns None if
+        the file does not exist.
+        
+        The rule that needs the dependency is available via emk.current_rule.
         
         Arguments:
           abs_path -- The absolute path of the dependency to check.
           cache    -- A dict containing cached information used to determine if the dependency has changed. This should be filled
                       in with updated information if a change is detected.
-          weak     -- Whether or not this is a weak dependency. If True, it is not an error if the dependency does not exist
-                      (return False), and if there is no cached information about the dependency, False should also be returned.
-                      If False (not a weak dependency), then a build error should be raised if the dependency does not exist,
-                      and if there is no cached information about the dependency (assuming it exists), True should be returned.
         """
         try:
             modtime = os.path.getmtime(abs_path)
@@ -1007,9 +1004,7 @@ class EMK_Base(object):
                 self.log.debug("Modtime for %s has not changed (%s)", abs_path, cached_modtime)
             return False
         except OSError:
-            if weak:
-                return False
-            raise _BuildError("Could not get modtime for %s" % (abs_path))
+            return None
     
     def _get_changed_reqs(self, rule):
         changed_reqs = []
@@ -1018,7 +1013,12 @@ class EMK_Base(object):
                 changed_reqs.append(req.abs_path)
             else:
                 rcache = rule._cache[req.abs_path]
-                if self._req_has_changed(rule, req, rcache, weak):
+                c = self._req_has_changed(rule, req, rcache)
+                if c is None:
+                    # it is OK for weak dependencies to not exist
+                    if not weak:
+                        raise _BuildError("Failed to determine if %s has changed", req.abs_path)
+                elif c:
                     changed_reqs.append(req.abs_path)
         return changed_reqs
     
@@ -1040,6 +1040,9 @@ class EMK_Base(object):
             
             try:
                 rule._built = True
+                
+                self._local.current_scope = rule.scope
+                self._local.current_rule = rule
 
                 need_build = False
                 changed_reqs = self._get_changed_reqs(rule)
@@ -1059,14 +1062,12 @@ class EMK_Base(object):
 
                 if need_build:
                     produces = [p.abs_path for p in rule.produces]
-                    self._local.current_scope = rule.scope
                     
-                    self._local.current_rule = rule
                     if not rule.threadsafe:
                         os.chdir(rule.scope.dir)
                     rule.func(produces, rule.requires, *rule.args)
-                    self._local.current_rule = None
 
+                self._local.current_rule = None
                 self._done_rule(rule, need_build)
             except _BuildError as e:
                 self._add_bad_rule(rule)
@@ -1536,7 +1537,7 @@ class EMK(EMK_Base):
     
     Global modifiable properties:
       has_changed_func      -- The default function to determine if a rule requirement or product has changed. If replaced,
-                               the replacement's function signature should be "def has_changed_func(abs_path, cache, weak=False):".
+                               the replacement's function signature should be "def has_changed_func(abs_path, cache):".
       build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
       proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
     
@@ -1976,10 +1977,9 @@ class EMK(EMK_Base):
         """
         Add weak secondary dependencies to a target.
         
-        Weak secondary dependencies are treated like normal secondary dependencies, except that:
-          * If a weak secondary dependency does not exist, the rule may still be executed.
-          * If there is no cached information for a weak secondary dependency, the has_changed function
-            for the rule should return False (ie, treat it as if the weak dependency has not changed).
+        Weak secondary dependencies are treated like normal secondary dependencies, except that
+        if a weak secondary dependency does not exist, the rule may still be executed, and no build error
+        is raised.
         
         This functionality is intended for dependencies that are discovered through examination of the
         primary dependencies. The driving example is header files for C/C++.

@@ -38,7 +38,7 @@ class _GccCompiler(object):
         compile_c() or compile_cxx() methods.
         
         Arguments:
-          path -- The path to the dependnecy file.
+          path -- The path to the dependency file.
         
         Returns a list of paths (strings) of all the extra dependencies.
         """
@@ -69,7 +69,10 @@ class _GccCompiler(object):
                 data = f.read()
                 data = data.replace("\\\n", "")
                 items = shlex.split(data)
-                unique_items = set(items[2:])
+                unique_items = set(items[2:]) - set([""])
+                # set up cache for weak dependencies
+                for item in unique_items:
+                    emk.current_rule.has_changed_func(emk.abspath(item))
                 f.seek(0)
                 f.truncate(0)
                 f.write('\n'.join(unique_items))
