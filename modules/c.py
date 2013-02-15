@@ -72,7 +72,7 @@ class _GccCompiler(object):
                 unique_items = set(items[2:]) - set([""])
                 # set up cache for weak dependencies
                 for item in unique_items:
-                    emk.current_rule.has_changed_func(emk.abspath(item))
+                    emk.current_rule.has_changed_func(emk.abspath(item), emk.rule_cache(item))
                 f.seek(0)
                 f.truncate(0)
                 f.write('\n'.join(unique_items))

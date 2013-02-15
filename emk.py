@@ -997,8 +997,6 @@ class EMK_Base(object):
             if cached_modtime != modtime:
                 self.log.debug("Modtime for %s has changed; cached = %s, actual = %s", abs_path, cached_modtime, modtime)
                 cache["modtime"] = modtime
-                if weak and cached_modtime is None:
-                    return False
                 return True
             else:
                 self.log.debug("Modtime for %s has not changed (%s)", abs_path, cached_modtime)
