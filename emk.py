@@ -60,22 +60,22 @@ class _Rule(object):
     Properties should not be modified.
     
     Properties:
-      func       -- The function to execute to run the rule. This should take at least 2 arguments: the list of canonical product paths,
-                    the list of canonical requirement paths, and any additional args as desired.
-      produces   -- The list of emk.Target instances that are produced by this rule.
-      requires   -- The list of things that this rule depends on (canonical paths). These are the primary dependencies of the rule.
-                    All primary dependencies of a rule are built before the rule is built. If a primary dependency does not
-                    exist, a build error is raised.
-      args       -- The arbitrary args that will be passed (unpacked) to the rule function (specified when the rule was created).
-      threadsafe -- Whether or not the rule is threadsafe (True or False). Specified when the rule was created. Non-threadsafe rules are executed
-                    sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
-                    before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
-      ex_safe    -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
-                    a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
-      has_changed_func -- The function to execute to determine if a requirement or product has changed. Uses emk.has_changed_func by default.
-                          The function signature should be "def has_changed_func(abs_path, cache):".
+      func        -- The function to execute to run the rule. This should take at least 2 arguments: the list of canonical product paths,
+                     the list of canonical requirement paths, and any additional args as desired.
+      produces    -- The list of emk.Target instances that are produced by this rule.
+      requires    -- The list of things that this rule depends on (canonical paths). These are the primary dependencies of the rule.
+                     All primary dependencies of a rule are built before the rule is built. If a primary dependency does not
+                     exist, a build error is raised.
+      args        -- The arbitrary args that will be passed (unpacked) to the rule function (specified when the rule was created).
+      threadsafe  -- Whether or not the rule is threadsafe (True or False). Specified when the rule was created. Non-threadsafe rules are executed
+                     sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
+                     before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
+      ex_safe     -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
+                     a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
+      has_changed -- The function to execute to determine if a requirement or product has changed. Uses emk.default_has_changed by default.
+                     The function signature should be "def has_changed(abs_path):".
                           
-      stack      -- The stack of where the rule was defined (a list of strings).
+      stack       -- The stack of where the rule was defined (a list of strings).
     
     Build-time properties (only usable when the rule is being executed):
       weak_deps      -- The set of weak dependencies (canonical paths) of this rule (added using emk.weak_depend()).
@@ -86,14 +86,14 @@ class _Rule(object):
                         All secondary dependencies of a rule are built before the rule is built. If a secondary dependency does not
                         exist, a build error is raised.
     """
-    def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed_func, scope):
+    def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed, scope):
         self.func = func
         self.produces = []
         self.requires = requires
         self.args = args
         self.threadsafe = threadsafe
         self.ex_safe = ex_safe
-        self.has_changed_func = has_changed_func
+        self.has_changed = has_changed
         
         self.scope = scope
         
@@ -921,7 +921,7 @@ class EMK_Base(object):
         now = time.time()
         for t in rule.produces:
             abs_path = t.abs_path
-            cache = rule._cache[abs_path]
+            cache = rule._cache.setdefault(abs_path, {})
             virtual = cache.get("virtual", False)
             if built:
                 changed = (t.abs_path not in rule._untouched)
@@ -961,14 +961,15 @@ class EMK_Base(object):
             with self._lock:
                 self._bad_rules.append(rule)
     
-    def _req_has_changed(self, rule, req, cache):
+    def _req_has_changed(self, rule, req):
         if req.abs_path is self.ALWAYS_BUILD:
             return True
             
         virtual_modtime = req._virtual_modtime
         if virtual_modtime is None:
-            return rule.has_changed_func(req.abs_path, cache)
+            return rule.has_changed(req.abs_path)
         else:
+            cache = rule._cache.setdefault(req.abs_path, {})
             cached_modtime = cache.get("vmodtime")
             if cached_modtime != virtual_modtime:
                 self.log.debug("Modtime (virtual) for %s has changed; cached = %s, actual = %s", req.abs_path, cached_modtime, virtual_modtime)
@@ -978,20 +979,20 @@ class EMK_Base(object):
                 self.log.debug("Modtime (virtual) for %s has not changed (%s)", req.abs_path, cached_modtime)
             return False
     
-    def has_changed_func(self, abs_path, cache):
+    def default_has_changed(self, abs_path):
         """
         Default function for determining if a rule dependency has changed. Returns True if the file modtime
         of the dependency differs from the cached value, or if there is no cached value. Returns None if
         the file does not exist.
         
-        The rule that needs the dependency is available via emk.current_rule.
+        Note that when a has_changed function is executing, the rule that needs the dependency is available
+        via emk.current_rule; the rule cache is accessible via emk.rule_cache().
         
         Arguments:
           abs_path -- The absolute path of the dependency to check.
-          cache    -- A dict containing cached information used to determine if the dependency has changed. This should be filled
-                      in with updated information if a change is detected.
         """
         try:
+            cache = self.rule_cache(abs_path)
             modtime = os.path.getmtime(abs_path)
             cached_modtime = cache.get("modtime")
             if cached_modtime != modtime:
@@ -1010,8 +1011,7 @@ class EMK_Base(object):
             if req.abs_path is self.ALWAYS_BUILD:
                 changed_reqs.append(req.abs_path)
             else:
-                rcache = rule._cache[req.abs_path]
-                c = self._req_has_changed(rule, req, rcache)
+                c = self._req_has_changed(rule, req)
                 if c is None:
                     # it is OK for weak dependencies to not exist
                     if not weak:
@@ -1020,21 +1020,12 @@ class EMK_Base(object):
                     changed_reqs.append(req.abs_path)
         return changed_reqs
     
-    def _fixup_rule_cache(self, rule):
-        path_set = (set([t.abs_path for t in rule.produces]) | set([r.abs_path for r, w in rule._required_targets])) - set([self.ALWAYS_BUILD])
-        cache = rule._cache
-        for p in path_set:
-            if p not in cache:
-                cache[p] = {}
-    
     def _build_thread_func(self, special):
         self._local.current_rule = None
         while(True):
             rule = self._buildable_rules.get(special)
             if rule is self._buildable_rules.STOP:
                 return
-            
-            self._fixup_rule_cache(rule)
             
             try:
                 rule._built = True
@@ -1049,12 +1040,12 @@ class EMK_Base(object):
                     self.log.debug("Need to build %s because dependencies %s have changed", [t.abs_path for t in rule.produces], changed_reqs)
                 else:
                     for t in rule.produces:
-                        tcache = rule._cache[t.abs_path]
+                        tcache = rule._cache.setdefault(t.abs_path, {})
                         if not tcache.get("virtual", False): # virtual products of this rule cannot be modified externally
                             if not os.path.exists(t.abs_path):
                                 self.log.debug("Need to build %s because it does not exist", t.abs_path)
                                 need_build = True
-                            elif t._rebuild_if_changed and rule.has_changed_func(t.abs_path, tcache):
+                            elif t._rebuild_if_changed and rule.has_changed(t.abs_path):
                                 self.log.debug("Need to build %s because it has changed", t.abs_path)
                                 need_build = True
 
@@ -1462,7 +1453,7 @@ class EMK_Base(object):
         self.log.info("Module %s not found", name)
         return None
     
-    def _rule(self, func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack):
+    def _rule(self, func, produces, requires, args, threadsafe, ex_safe, has_changed, stack):
         if self.scope_name != "rules":
             raise _BuildError("Cannot create rules when not in 'rules' scope (current scope = '%s')" % (self.scope_name), stack)
         
@@ -1474,10 +1465,10 @@ class EMK_Base(object):
                 fixed_produces.append(p)
         fixed_requires = [_make_require_abspath(r, self.scope) for r in _flatten_gen(requires) if r != ""]
         
-        if not has_changed_func:
-            has_changed_func = self.has_changed_func
+        if not has_changed:
+            has_changed = self.default_has_changed
 
-        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, has_changed_func, self.scope)
+        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, has_changed, self.scope)
         new_rule.stack = stack
         with self._lock:
             self._rules.append(new_rule)
@@ -1534,8 +1525,8 @@ class EMK(EMK_Base):
       explicit_targets -- The set of explicit targets passed to EMK (ie, all arguments that are not options).
     
     Global modifiable properties:
-      has_changed_func      -- The default function to determine if a rule requirement or product has changed. If replaced,
-                               the replacement's function signature should be "def has_changed_func(abs_path, cache):".
+      default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced,
+                               the replacement's function signature should be "def has_changed(abs_path):".
       build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
       proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
     
@@ -1889,19 +1880,18 @@ class EMK(EMK_Base):
           kwargs   -- Keyword arguments - see below.
         
         Keyword arguments:
-          threadsafe       -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
-                              
-          ex_safe          -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
-                              The warning indicates that the rule was partially executed and may have left partial build products, so
-                              the build should be cleaned. The default value is False.
-          has_changed_func -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
-                              have changed. The default value is emk.has_changed_func.
+          threadsafe  -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+          ex_safe     -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+                         The warning indicates that the rule was partially executed and may have left partial build products, so
+                         the build should be cleaned. The default value is False.
+          has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
+                         have changed. The default value is emk.default_has_changed.
         """
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
         threadsafe = kwargs.get("threadsafe", False)
         ex_safe = kwargs.get("ex_safe", False)
-        has_changed_func = kwargs.get("has_changed_func", None)
-        self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack)
+        has_changed = kwargs.get("has_changed", None)
+        self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed, stack)
     
     def make_rule(self, produces, requires, *args, **kwargs):
         """
@@ -1925,22 +1915,22 @@ class EMK(EMK_Base):
           kwargs   -- Keyword arguments - see below.
         
         Keyword arguments:
-          threadsafe       -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
-                              Threadsafe rules may be executed in parallel. If False, the current working directory will be set to the
-                              scope directory before the rule is executed. Non-threadsafe rules are all executed by a single thread.
-                              The default value is False.
-          ex_safe          -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
-                              The warning indicates that the rule was partially executed and may have left partial build products, so
-                              the build should be cleaned. The default value is False.
-          has_changed_func -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
-                              have changed. The default value is emk.has_changed_func.
+          threadsafe  -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+                         Threadsafe rules may be executed in parallel. If False, the current working directory will be set to the
+                         scope directory before the rule is executed. Non-threadsafe rules are all executed by a single thread.
+                         The default value is False.
+          ex_safe     -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+                         The warning indicates that the rule was partially executed and may have left partial build products, so
+                         the build should be cleaned. The default value is False.
+          has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
+                         have changed. The default value is emk.default_has_changed.
         """
         def decorate(func):
             stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
             threadsafe = kwargs.get("threadsafe", False)
             ex_safe = kwargs.get("ex_safe", False)
-            has_changed_func = kwargs.get("has_changed_func", None)
-            self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed_func, stack)
+            has_changed = kwargs.get("has_changed", None)
+            self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed, stack)
             return func
         return decorate
     
@@ -2223,15 +2213,9 @@ class EMK(EMK_Base):
         abs_paths = set([_make_target_abspath(path, self.scope) for path in _flatten_gen(paths)])
         cache = rule._cache
         for path in abs_paths:
-            tcache = cache.get(path)
-            # If there is no entry in the rule cache for the path, it is not a rule product
-            # Note that there may be other entries in the rule cache that are not products,
-            # but marking them as virtual has no effect (so it is harmless).
-            if tcache is None:
-                self.log.debug("Cannot mark %s as virtual since it is not a rule product", path)
-            else:
-                self.log.debug("Marking %s as virtual", path)
-                tcache["virtual"] = True
+            tcache = cache.setdefault(path, {})
+            self.log.debug("Marking %s as virtual", path)
+            tcache["virtual"] = True
     
     def mark_untouched(self, *paths):
         """

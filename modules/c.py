@@ -70,9 +70,9 @@ class _GccCompiler(object):
                 data = data.replace("\\\n", "")
                 items = shlex.split(data)
                 unique_items = set(items[2:]) - set([""])
-                # set up cache for weak dependencies
+                # call has_changed to set up rule cache for future builds.
                 for item in unique_items:
-                    emk.current_rule.has_changed_func(emk.abspath(item), emk.rule_cache(item))
+                    emk.current_rule.has_changed(emk.abspath(item))
                 f.seek(0)
                 f.truncate(0)
                 f.write('\n'.join(unique_items))
