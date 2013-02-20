@@ -73,7 +73,8 @@ class _Rule(object):
       ex_safe     -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
                      a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
       has_changed -- The function to execute to determine if a requirement or product has changed. Uses emk.default_has_changed by default.
-                     The function signature should be "def has_changed(abs_path):".
+                     The function should take a single argument which is the absolute path of the thing to check to see if it has changed.
+                     When this function is executing, emk.current_rule and emk.rule_cache() are available.
                           
       stack       -- The stack of where the rule was defined (a list of strings).
     
@@ -1525,8 +1526,9 @@ class EMK(EMK_Base):
       explicit_targets -- The set of explicit targets passed to EMK (ie, all arguments that are not options).
     
     Global modifiable properties:
-      default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced,
-                               the replacement's function signature should be "def has_changed(abs_path):".
+      default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
+                               function should take a single argument which is the absolute path of the thing to check to see if it has changed.
+                               When this function is executing, emk.current_rule and emk.rule_cache() are available.
       build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
       proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
     
