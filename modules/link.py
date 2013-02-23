@@ -53,7 +53,7 @@ class _GccLinker(object):
         self.strip_path = path_prefix + "strip"
         self.nm_path = path_prefix + "nm"
         
-        self.main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
+        self.main_nm_regex = re.compile(r'\s+T\s+main\s*$', re.MULTILINE)
     
     def contains_main_function(self, objfile):
         """
@@ -227,6 +227,7 @@ class _OsxGccLinker(_GccLinker):
         super(_OsxGccLinker, self).__init__(path_prefix)
         self.lipo_path = self.path_prefix + "lipo"
         self.libtool_path = self.path_prefix + "libtool"
+        self.main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
     
     def extract_static_lib(self, lib, dest_dir):
         """
