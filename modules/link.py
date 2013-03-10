@@ -646,6 +646,10 @@ class Module(object):
         if not making_static_lib:
             utils.mark_virtual_rule(["link.__static_lib__"], [])
         
+        if lib_objs and not (self.make_static_lib or self.make_shared_lib):
+            utils.mark_virtual_rule(["link.__force_compile__"], lib_objs)
+            emk.autobuild("link.__force_compile__")
+        
         if self.make_static_lib and self.lib_in_lib:
             libname = self.lib_prefix + dirname + "_all" + self.static_lib_ext
             if self.static_libname:
