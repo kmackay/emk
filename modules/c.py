@@ -34,20 +34,16 @@ class _GccCompiler(object):
     
     def load_extra_dependencies(self, path):
         """
-        Load extra dependencies from a dependency file that was written by this compiler instance's
-        compile_c() or compile_cxx() methods.
+        Load extra dependencies for the given object file path. The extra dependencies could be loaded from a generated
+        dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
         
         Arguments:
-          path -- The path to the dependency file.
+          path -- The path of the object file to get dependencies for.
         
         Returns a list of paths (strings) of all the extra dependencies.
         """
-        try:
-            with open(path) as f:
-                items = [s for s in f.read().split('\n') if s]
-                return items
-        except IOError:
-            pass
+        cache = emk.scope_cache(path)
+        return cache.get("secondary_deps", [])
     
     def depfile_args(self, dep_file):
         """
@@ -55,7 +51,8 @@ class _GccCompiler(object):
         """
         return ["-Wp,-MMD,%s" % (dep_file)]
     
-    def compile(self, exe, source, dest, dep_file, includes, defines, flags):
+    def compile(self, exe, source, dest, includes, defines, flags):
+        dep_file = dest + ".dep"
         args = [exe]
         args.extend(self.depfile_args(dep_file))
         args.extend(["-I%s" % (emk.abspath(d)) for d in includes])
@@ -65,54 +62,47 @@ class _GccCompiler(object):
         utils.call(args)
         
         try:
-            with open(dep_file, "r+") as f:
+            with open(dep_file, "r") as f:
                 data = f.read()
                 data = data.replace("\\\n", "")
                 items = shlex.split(data)
-                unique_items = set(items[2:]) - set([""])
+                unique_items = [emk.abspath(item) for item in (set(items[2:]) - set([""]))]
                 # call has_changed to set up rule cache for future builds.
                 for item in unique_items:
-                    emk.current_rule.has_changed(emk.abspath(item))
-                f.seek(0)
-                f.truncate(0)
-                f.write('\n'.join(unique_items))
+                    emk.current_rule.has_changed(item)
+                cache = emk.scope_cache(dest)
+                cache["secondary_deps"] = unique_items
         except IOError:
-            log.error("Failed to fix up depfile %s", dep_file)
+            log.error("Failed to open depfile %s", dep_file)
             utils.rm(dep_file)
         
-    def compile_c(self, source, dest, dep_file, includes, defines, flags):
+    def compile_c(self, source, dest, includes, defines, flags):
         """
         Compile a C source file into an object file.
         
         Arguments:
           source   -- The C source file path to compile.
           dest     -- The output object file path.
-          dep_file -- The path to a dep file that should be written to contain secondary dependencies of the object file
-                      (eg, header files (transitively) included from the source file). This file will be read by
-                      the compiler's load_extra_dependencies() method.
           includes -- A list of extra include directories.
           defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
           flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the EMK utils module:
                       'flattened = utils.flatten(flags)'.
         """
-        self.compile(self.c_path, source, dest, dep_file, includes, defines, flags)
+        self.compile(self.c_path, source, dest, includes, defines, flags)
     
-    def compile_cxx(self, source, dest, dep_file, includes, defines, flags):
+    def compile_cxx(self, source, dest, includes, defines, flags):
         """
         Compile a C++ source file into an object file.
         
         Arguments:
           source   -- The C++ source file path to compile.
           dest     -- The output object file path.
-          dep_file -- The path to a dep file that should be written to contain secondary dependencies of the object file
-                      (eg, header files (transitively) included from the source file). This file will be read by
-                      the compiler's load_extra_dependencies() method.
           includes -- A list of extra include directories.
           defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
           flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the EMK utils module:
                       'flattened = utils.flatten(flags)'.
         """
-        self.compile(self.cxx_path, source, dest, dep_file, includes, defines, flags)
+        self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
 class Module(object):
     """
@@ -319,7 +309,7 @@ class Module(object):
         requires = [src]
         extra_deps = None
         if self.compiler:
-            extra_deps = self.compiler.load_extra_dependencies(emk.abspath(dest + ".dep"))
+            extra_deps = self.compiler.load_extra_dependencies(emk.abspath(dest))
         if extra_deps is None:
             requires.append(emk.ALWAYS_BUILD)
         
@@ -345,9 +335,9 @@ class Module(object):
             raise emk.BuildError("No compiler defined!")
         try:
             if cxx:
-                self.compiler.compile_cxx(requires[0], produces[0], produces[0] + ".dep", includes, defines, flags)
+                self.compiler.compile_cxx(requires[0], produces[0], includes, defines, flags)
             else:
-                self.compiler.compile_c(requires[0], produces[0], produces[0] + ".dep", includes, defines, flags)
+                self.compiler.compile_c(requires[0], produces[0], includes, defines, flags)
         except:
             utils.rm(produces[0])
             utils.rm(produces[0] + ".dep")
