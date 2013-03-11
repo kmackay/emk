@@ -114,10 +114,10 @@ class _Rule(object):
         self.stack = []
 
 class _ScopeData(object):
-    def __init__(self, parent, scope_type, dir, proj_dir):
+    def __init__(self, parent, scope_type, scope_dir, proj_dir):
         self.parent = parent
         self.scope_type = scope_type
-        self.dir = dir
+        self.dir = scope_dir
         self.proj_dir = proj_dir
         
         self._cache = None
@@ -871,7 +871,7 @@ class EMK_Base(object):
         paths = [t.abs_path for t in rule.produces]
         paths.sort()
         rule._key = key = hashlib.md5('\0'.join(paths)).hexdigest()
-        cache = rule.scope._cache.setdefault(key, {})
+        cache = rule.scope._cache.setdefault("rules", {}).setdefault(key, {})
         rule._cache = cache
     
     def _toplevel_examine_target(self, target):
@@ -937,7 +937,7 @@ class EMK_Base(object):
                     except OSError:
                         rulestack = ["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack]
                         with self._lock:
-                            del rule.scope._cache[rule._key]
+                            del rule.scope._cache["rules"][rule._key]
                         raise _BuildError("%s should have been produced by the rule" % (abs_path), rulestack)
             else:
                 changed = False
@@ -1082,7 +1082,6 @@ class EMK_Base(object):
         # otherwise, build all explicit targets and autobuild targets that we can
 
         self._building = True
-        self._load_scope_caches()
 
         self._buildable_rules = _RuleQueue(self._build_threads)
         
@@ -1286,24 +1285,26 @@ class EMK_Base(object):
         self._local.current_scope = parent_scope
         self._current_proj_dir = proj_dir
     
-    def _load_scope_caches(self):
-        start_time = time.time()
-        for path, scope in self._visited_dirs.items():
-            if scope._cache is None:
-                scope._cache = {}
-                if not self.cleaning:
-                    cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
-                    try:
-                        with open(cache_path, "rb") as f:
-                            scope._cache = pickle.load(f)
-                    except IOError:
-                        pass
-        self._load_cache_time += (time.time() - start_time)
-    
+    def _load_scope_cache(self, scope):
+        if not self.cleaning:
+            cache_path = os.path.join(scope.dir, scope.build_dir, "__emk_cache__")
+            try:
+                with open(cache_path, "rb") as f:
+                    scope._cache = pickle.load(f)
+            except IOError:
+                pass
+        if scope._cache is None:
+            scope._cache = {}
+
+    def _remove_cache(self, cache_path):
+        try:
+            os.remove(cache_path)
+        except OSError:
+            pass
+
     def _write_scope_caches(self):
         if self.cleaning:
             return
-        start_time = time.time()
         for path, scope in self._visited_dirs.items():
             cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
             if scope._cache:
@@ -1311,19 +1312,10 @@ class EMK_Base(object):
                     with open(cache_path, "wb") as f:
                         pickle.dump(scope._cache, f, -1)
                 except IOError:
-                    self.log.error("Failed to open cache file %s", cache_path)
+                    self.log.error("Failed to write cache file %s", cache_path)
                 except:
-                    try:
-                        os.remove(cache_path)
-                    except OSError:
-                        pass
+                    self._remove_cache(cache_path)
                     raise
-            else:
-                try:
-                    os.remove(cache_path)
-                except OSError:
-                    pass
-        self._load_cache_time += (time.time() - start_time)
     
     def _handle_dir(self, d, first_dir=False):
         path = os.path.realpath(d)
@@ -1340,6 +1332,8 @@ class EMK_Base(object):
         # First, load the parent scope, and create a rules scope for this directory.
         self._load_parent_scope(path)
         self._local.current_scope = _ScopeData(self._local.current_scope, "rules", path, self._current_proj_dir)
+        
+        self._load_scope_cache(self._local.current_scope)
         
         # Load any preload modules that have been inherited from the parent scope(s).
         self.scope.prepare_do_later()
@@ -1557,6 +1551,9 @@ class EMK(EMK_Base):
         self.Container = _Container
 
     def _set_build_dir(self, dir):
+        if self.scope.scope_type == "rules":
+            stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
+            raise _BuildError("Cannot change the build dir when in rules scope", stack)
         self.scope.build_dir = dir
 
     def _set_module_paths(self, paths):
@@ -1647,7 +1644,6 @@ class EMK(EMK_Base):
         
         self._time_lines = []
         self._build_phase = 1
-        self._load_cache_time = 0
         
         try:
             self._load_config()
@@ -1699,9 +1695,6 @@ class EMK(EMK_Base):
                     
         finally:
             self._write_scope_caches()
-        
-        if not self.cleaning:
-            self._time_lines.append("Load/store caches: %0.3f seconds" % (self._load_cache_time))
         
         unbuilt = set()
         for path, target in self._targets.items():
@@ -2243,6 +2236,23 @@ class EMK(EMK_Base):
             abs_path = _make_target_abspath(path, self.scope)
             self.log.debug("Marking %s as untouched", abs_path)
             untouched_set.add(abs_path)
+    
+    def scope_cache(self, key):
+        """
+        Retrieve the generic cache for a given key string in the current scope. This cache is kept separate from the rule cache.
+        
+        The cache can be used to store information between emk invocations. The cache be retrieved and modified
+        when you are in rules scope (since the cache is scope-specific).
+        
+        Arguments:
+          key -- The key string to retrieve the cache for.
+        
+        Returns the cache dict for the given key (or an empty dict if there was currently no cache for that key).
+        Returns None if called while not in rules scope.
+        """
+        if self.scope._cache is None:
+            return None
+        return self.scope._cache.setdefault("other", {}).setdefault(key, {})
     
     def rule_cache(self, key):
         """
