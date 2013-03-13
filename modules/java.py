@@ -15,7 +15,7 @@ main_function_regex = re.compile(r'((public\s+static)|(static\s+public))\s+void\
 
 class Module(object):
     """
-    EMK module for compiling Java code and creating jar files. Depends on the utils module.
+    emk module for compiling Java code and creating jar files. Depends on the utils module.
     
     This module will autodetect .java files in the current directory, compile them (with javac) and create
     a jar file out of the compiled classes. It will also autodetect classes that contain a main() method;
@@ -26,8 +26,8 @@ class Module(object):
     .java file (ie, it won't work if the main() method is in a static inner class). However you can explicitly
     define classes that contain a main() method using the 'exe_classes' property.
     
-    Currently, the jar_in_jar/exe_jar_in_jar properties will only cause the EMK-managed dependency jar contents
-    to be included in the jar file - this does not include the 'sysjars' (ie, jar files that are built externally to EMK).
+    Currently, the jar_in_jar/exe_jar_in_jar properties will only cause the emk-managed dependency jar contents
+    to be included in the jar file - this does not include the 'sysjars' (ie, jar files that are built externally to emk).
     
     Properties (inherited from parent scope):
       javac_cmd -- The path to the java compiler. The default value is "javac".
@@ -63,7 +63,7 @@ class Module(object):
       exe_jar_in_jar -- If True, the contents of all jar dependencies (ie, from depdirs and projdirs) will be included in the generated
                         jar files for executable classes (to allow a self-contained jar executable). The default value is True.
       
-      depdirs      -- A list of directories that the java files in this directory depend on. The java module will instruct EMK
+      depdirs      -- A list of directories that the java files in this directory depend on. The java module will instruct emk
                       to recurse into these directories, and the java classes in those directories will be compiled before
                       the java files in the current directory. When compiling java files, these directories will be added
                       to the classpath. Currently, circular directory dependencies are not supported for java.

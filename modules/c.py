@@ -10,7 +10,7 @@ class _GccCompiler(object):
     """
     Compiler class for using gcc/g++ to compile C/C++ respectively.
     
-    In order for the EMK c module to use a compiler instance, the compiler class must define the following methods:
+    In order for the emk c module to use a compiler instance, the compiler class must define the following methods:
       load_extra_dependencies
       compile_c
       compile_cxx
@@ -85,7 +85,7 @@ class _GccCompiler(object):
           dest     -- The output object file path.
           includes -- A list of extra include directories.
           defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
-          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the EMK utils module:
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
                       'flattened = utils.flatten(flags)'.
         """
         self.compile(self.c_path, source, dest, includes, defines, flags)
@@ -99,16 +99,16 @@ class _GccCompiler(object):
           dest     -- The output object file path.
           includes -- A list of extra include directories.
           defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
-          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the EMK utils module:
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
                       'flattened = utils.flatten(flags)'.
         """
         self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
 class Module(object):
     """
-    EMK module for compiling C and C++ code. Depends on the link module (and utils).
+    emk module for compiling C and C++ code. Depends on the link module (and utils).
     
-    This module defines EMK rules during the prebuild stage, to allow autodiscovery of generated source files
+    This module defines emk rules during the prebuild stage, to allow autodiscovery of generated source files
     from rules defined before the prebuild stage (ie, in the post_rules() method of other modules). See the
     autodetect and autodetect_from_targets properties for more information about autodiscovery of source files.
     

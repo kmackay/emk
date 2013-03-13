@@ -71,7 +71,7 @@ class _Rule(object):
                      sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
                      before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
       ex_safe     -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
-                     a non-exception-safe rule is executing, EMK will print a warning indicating that a rule was partially executed, and should be cleaned.
+                     a non-exception-safe rule is executing, emk will print a warning indicating that a rule was partially executed, and should be cleaned.
       has_changed -- The function to execute to determine if a requirement or product has changed. Uses emk.default_has_changed by default.
                      The function should take a single argument which is the absolute path of the thing to check to see if it has changed.
                      When this function is executing, emk.current_rule and emk.rule_cache() are available.
@@ -317,14 +317,14 @@ class _NoStyler(object):
 
 class _PassthroughStyler(object):
     """
-    Passthrough styler. Does not modify the EMK style tags in any way.
+    Passthrough styler. Does not modify the emk style tags in any way.
     """
     def style(self, string, record):
         return string
         
 class _ConsoleStyler(object):
     """
-    Console styler. Converts the EMK style tags into ANSI escape codes.
+    Console styler. Converts the emk style tags into ANSI escape codes.
     
     Properties:
       styles -- A dict containing "tag": <escape code> mappings. You may modify this dict to change
@@ -369,16 +369,16 @@ class _ConsoleStyler(object):
         
 class _HtmlStyler(object):
     """
-    HTML styler. Converts the EMK style tags into CSS classes.
+    HTML styler. Converts the emk style tags into CSS classes.
     
     Each log record (ie, an entire log message) is surrounded by <div class="emk_log emk_$levelname>...<\div>" tags,
-    where the $levelname is debug, info, warning etc. Each EMK style tag is converted into a <span class="emk_$tag">...<\span>,
-    with $tag being the EMK tag string.
+    where the $levelname is debug, info, warning etc. Each emk style tag is converted into a <span class="emk_$tag">...<\span>,
+    with $tag being the emk tag string.
     
     The characters '<', '>', and '&' are escaped for HTML. Four consecutive spaces will be replaced with four non-breaking spaces
     for indentation. Newlines in log messages will be repalced with <br>.
     
-    Using this styler, the EMK output can be inserted into an HTML page with appropriate CSS to make it look fancy.
+    Using this styler, the emk output can be inserted into an HTML page with appropriate CSS to make it look fancy.
     
     Example CSS:
       <style type="text/css">
@@ -410,14 +410,14 @@ class _HtmlStyler(object):
 
 class _Formatter(logging.Formatter):
     """
-    Formatter for EMK log messages.
+    Formatter for emk log messages.
     
     This formatter converts the log levelname to lowercase. If "extra={'adorn':False}" was passed to the log call,
     the message will be passed to the styler as-is. Otherwise, the format string is interpolated using the log record's __dict__.
     
     Properties:
       format_str -- The format string to use for normal ("adorned") log messages.
-      styler     -- The log styler to use to convert EMK style tags.
+      styler     -- The log styler to use to convert emk style tags.
     """
     def __init__(self, format):
         self.format_str = format
@@ -545,7 +545,7 @@ def _make_require_abspath(rel_path, scope):
 
 class EMK_Base(object):
     """
-    Private implementation details of EMK. The public API is derived from this class.
+    Private implementation details of emk. The public API is derived from this class.
     """
     def __init__(self, args):
         global emk_dev
@@ -1495,7 +1495,7 @@ class EMK_Base(object):
 
 class EMK(EMK_Base):
     """
-    The public EMK API.
+    The public emk API.
     
     The module-level setup() function (called by main()) installs an instance of this class into builtins named 'emk'.
     Therefore you can access this instance from within your emk_global.py, emk_project.py, emk_subproj.py, or emk_rules.py
@@ -1507,17 +1507,17 @@ class EMK(EMK_Base):
       Rule       -- Representation of a rule.
     
     Global read-only properties (not based on current scope):
-      log              -- The EMK log (named 'emk'). Modules should create sub-logs of this to use the EMK logging features.
-      formatter        -- The formatter instance for the EMK log.
+      log              -- The emk log (named 'emk'). Modules should create sub-logs of this to use the emk logging features.
+      formatter        -- The formatter instance for the emk log.
       
       ALWAYS_BUILD     -- A special token. When used as a rule requirement, ensures that the rule will always be executed.
       
       cleaning         -- True if "clean" has been passed as an explicit target; false otherwise.
       building         -- True when rules are being executed, false at other times.
       emk_dir          -- The directory which contains the emk module.
-      options          -- A dict containing all command-line options passed to EMK (ie, arguments of the form key=value).
+      options          -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value).
                           You can modify the contents of this dict.
-      explicit_targets -- The set of explicit targets passed to EMK (ie, all arguments that are not options).
+      explicit_targets -- The set of explicit targets passed to emk (ie, all arguments that are not options).
     
     Global modifiable properties:
       default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
@@ -1586,7 +1586,7 @@ class EMK(EMK_Base):
     
     def run(self, path):
         """
-        Run the EMK build in the given directory.
+        Run the emk build in the given directory.
         
         The build process in a given directory goes as follows:
           1. Load the global emk config from <emk dir>/config/emk_global.py>, if it exists and has not
@@ -1613,12 +1613,12 @@ class EMK(EMK_Base):
         
         Building continues until everything that can be built (from the set of examined targets) has been built. Note that it is
         possible that not all examined targets could be built immediately, since they may depend on things for which rules have
-        not yet been declared. EMK will attempt to build those targets later.
+        not yet been declared. emk will attempt to build those targets later.
         
         Once building is complete, the postbuild functions are executed. Note that if new postbuild functions are added during
         the postbuild stage, they will not be executed until after the next build phase.
         
-        Finally, any new directories are recursed into. If there is still work left to do (ie, unbuilt targets), EMK will start
+        Finally, any new directories are recursed into. If there is still work left to do (ie, unbuilt targets), emk will start
         a new build phase (returning to the prebuild stage). Build phases will continue until all targets are built, or until
         there is nothing left to do. If there are unbuilt targets after building has stopped, a build error is raised.
         
@@ -1727,7 +1727,7 @@ class EMK(EMK_Base):
         """
         Import a Python module from a set of search directories.
         
-        Finds the module in the given search directories using imp.find_module(). If found, EMK will change
+        Finds the module in the given search directories using imp.find_module(). If found, emk will change
         the working directory to the directory that the module was found in, import the module, and then
         return the working directory to its original state. If the module is not found, no error is raised,
         but None will be returned.
@@ -1743,35 +1743,35 @@ class EMK(EMK_Base):
     
     def module(self, *names):
         """
-        Load one or more EMK modules into the current scope.
+        Load one or more emk modules into the current scope.
         
-        EMK has a module system which allows automatic creation of rules, and easy hierarchical configuration.
-        When a module is loaded into a scope, EMK will check to see if the module is already present in the scope;
-        if it is, then the module instance is returned. Otherwise, EMK will try to find an instance of the module
+        emk has a module system which allows automatic creation of rules, and easy hierarchical configuration.
+        When a module is loaded into a scope, emk will check to see if the module is already present in the scope;
+        if it is, then the module instance is returned. Otherwise, emk will try to find an instance of the module
         in a parent scope. If a parent instance is found, a new instance is created for the current scope using the
         parent instance's new_scope() method. This allows the new module instance to inherit configuration values
         from the parent scope if desired (based on how the module was designed).
         
-        If the module is not present in any parent scope, EMK will try to load a Python module of the same name from
+        If the module is not present in any parent scope, emk will try to load a Python module of the same name from
         the scope's module search paths (emk.module_paths). Note that the module search paths may be relative;
         relative paths and project/build dir placeholders are replaced based on the current scope. If the Python
         module is found, it is imported (if it was not previously imported), with the current working directory
-        set to the directory that the Python module was found in. An EMK module instance is created by calling
+        set to the directory that the Python module was found in. An emk module instance is created by calling
         Module(<current scope name>) on the Python module instance. This can be any callable that returns an
-        EMK module instance, but is usually a class named Module.
+        emk module instance, but is usually a class named Module.
         
-        An EMK module instance must provide a new_scope() method that takes the new scope type, and returns an
-        EMK module instance (potentially the same module instance; it is not required to create a new module instance).
+        An emk module instance must provide a new_scope() method that takes the new scope type, and returns an
+        emk module instance (potentially the same module instance; it is not required to create a new module instance).
         In addition, a module instance may provide load_* or post_* methods, where * may be any of the scope types
         ('global', 'project', 'subproj', or 'rules'). These methods should take no arguments. The load_* method is called
         when a new module instance is loaded into a scope of the corresponding type (after the new instance is created).
         The post_* method is called after the corresponding scope has been fully loaded (eg, after the emk_rules.py file
         has been imported for the rules scope).
         
-        Modules should only add EMK rules in the post_* methods (or later, if the post_* method uses emk.do_later(),
+        Modules should only add emk rules in the post_* methods (or later, if the post_* method uses emk.do_later(),
         emk.prebuild(), or emk.postbuild()).
         
-        It is advisable to avoid having a circular dependency between EMK modules (if the modules load each other at import
+        It is advisable to avoid having a circular dependency between emk modules (if the modules load each other at import
         time or when the module isntance is created) since this will probably lead to an infinite loop.
         
         Arguments:
@@ -1790,7 +1790,7 @@ class EMK(EMK_Base):
 
     def weak_module(self, *names):
         """
-        Load one or EMK modules into the current scope, without causing their post_<scope type>() methods to be called.
+        Load one or emk modules into the current scope, without causing their post_<scope type>() methods to be called.
         
         This is to provide a way to modify the configuration of a module for child scopes, without having each module's
         post_<scope type>() method called (so the module should not create any rules).
@@ -1814,7 +1814,7 @@ class EMK(EMK_Base):
     
     def insert_module(self, name, instance):
         """
-        Insert an EMK module instance into the current scope as a weak module.
+        Insert an emk module instance into the current scope as a weak module.
         
         This method allows you to create a module instance and provide it for use by child scopes without needing to
         create an actual Python module file to import. The instance will be installed into the current scope as a weak
@@ -1846,11 +1846,11 @@ class EMK(EMK_Base):
     
     def rule(self, func, produces, requires, *args, **kwargs):
         """
-        Declare an EMK rule.
+        Declare an emk rule.
         
         Any function that takes at least two arguments (the list of product paths and the list of requirement paths)
-        can be used in an EMK rule. When the function is executed, it must ensure that all declared products are actually
-        produced (they must be either present in the filesystem, or declared virtual using emk.mark_virtual()). EMK will
+        can be used in an emk rule. When the function is executed, it must ensure that all declared products are actually
+        produced (they must be either present in the filesystem, or declared virtual using emk.mark_virtual()). emk will
         ensure that all the requirements in the requires list (the primary dependencies) have been built or otherwise exist
         before the rule function is executed.
         
@@ -1876,7 +1876,7 @@ class EMK(EMK_Base):
         
         Keyword arguments:
           threadsafe  -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
-          ex_safe     -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+          ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
                          The warning indicates that the rule was partially executed and may have left partial build products, so
                          the build should be cleaned. The default value is False.
           has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
@@ -1890,10 +1890,10 @@ class EMK(EMK_Base):
     
     def make_rule(self, produces, requires, *args, **kwargs):
         """
-        Decorator to turn a function into an EMK rule.
+        Decorator to turn a function into an emk rule.
         
         Any function that takes at least two arguments (the list of product paths and the list of requirement paths)
-        can be turned into an EMK rule using @emk.make_rule(). The functionality is the same as passing 
+        can be turned into an emk rule using @emk.make_rule(). The functionality is the same as passing 
         the decorated function as the first argument to emk.rule(), with all other arguments being the same as those
         passed to the @emk.make_rule() decorator.
         
@@ -1914,7 +1914,7 @@ class EMK(EMK_Base):
                          Threadsafe rules may be executed in parallel. If False, the current working directory will be set to the
                          scope directory before the rule is executed. Non-threadsafe rules are all executed by a single thread.
                          The default value is False.
-          ex_safe     -- If False, then EMK will print a warning message if the execution of the rule is interrupted in any way.
+          ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
                          The warning indicates that the rule was partially executed and may have left partial build products, so
                          the build should be cleaned. The default value is False.
           has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
@@ -1933,10 +1933,10 @@ class EMK(EMK_Base):
         """
         Add secondary dependencies to a target.
         
-        If EMK determines that a target needs to be built, it will examine the dependencies of the rule that produces
+        If emk determines that a target needs to be built, it will examine the dependencies of the rule that produces
         that target. The primary dependencies are defined by the "requires" argument when the rule is created. The
         secondary dependencies of the rule are the set of secodary dependencies of all products of that rule, which are
-        added using emk.depend(). All primary and secondary dependencies of a rule are built by EMK before the rule is executed.
+        added using emk.depend(). All primary and secondary dependencies of a rule are built by emk before the rule is executed.
         
         Arguments:
           target       -- The target path to add secondary dependencies for. The path may be absolute, or relative to the scope dir.
@@ -2013,8 +2013,8 @@ class EMK(EMK_Base):
         """
         Mark the given targets as autobuild.
         
-        If no explicit targets are passed in on the command line, EMK will build all targets taht have been
-        marked as atuobuild. EMK will also build all autobuild targets when the explicit targets cannot be
+        If no explicit targets are passed in on the command line, emk will build all targets taht have been
+        marked as atuobuild. emk will also build all autobuild targets when the explicit targets cannot be
         fully built due to missing rules or dependencies.
         
         Arguments:
@@ -2064,7 +2064,7 @@ class EMK(EMK_Base):
         can be run as long as the file exists. However, if that file would be updated by a rule defined in a later build phase,
         the rule that depends on it should not be run until after that later rule has been defined (and executed, if required).
         
-        By requiring those dependencies to be produced by a rule, the build process will execute correctly - EMK will wait
+        By requiring those dependencies to be produced by a rule, the build process will execute correctly - emk will wait
         until the later build phase has defined and executed the rule(s) that produce the dependencies before examining
         the rules that depend on them.
         
@@ -2098,9 +2098,9 @@ class EMK(EMK_Base):
     
     def recurse(self, *paths):
         """
-        Specify other directories for EMK to visit.
+        Specify other directories for emk to visit.
         
-        At any time, you may call emk.recurse(path, ...) to specify other directories for EMK to visit.
+        At any time, you may call emk.recurse(path, ...) to specify other directories for emk to visit.
         Directories that have already been visited will be ignored (based on the canonical path of the directory).
         The process for handling a directory os described in emk.run().
         
@@ -2192,7 +2192,7 @@ class EMK(EMK_Base):
         """
         Mark the given paths as virtual. May only be called when a rule is executing.
         
-        After a rule is executed, EMK checks to ensure that the rule has generated all of its declared products.
+        After a rule is executed, emk checks to ensure that the rule has generated all of its declared products.
         Products that were marked as virtual by the rule are not expected to exist as actual files. All non-virtual
         products must exist in the filesystem.
         
@@ -2346,7 +2346,7 @@ class EMK(EMK_Base):
 
 
 def setup(args=[]):
-    """Set up EMK with the given arguments, and install it into builtins."""
+    """Set up emk with the given arguments, and install it into builtins."""
     emk = EMK(args)
     builtins.emk = emk
     return emk
@@ -2356,22 +2356,22 @@ def main(args):
     Execute the emk build process in the current directory.
     
     Arguments:
-      args -- A list of arguments to EMK. Arguments can either be options or targets.
+      args -- A list of arguments to emk. Arguments can either be options or targets.
             An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
             as explicit targets to be built. You may specify targets that contain '=' using the special option
-            "explicit_target=<target name>". All options (whether or not they are recognized by EMK) can be
+            "explicit_target=<target name>". All options (whether or not they are recognized by emk) can be
             accessed via the emk.options dict.
             
-            If no explicit targets are specified, EMK will build all autobuild targets.
+            If no explicit targets are specified, emk will build all autobuild targets.
     
     Recognized options:
       log     -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"],
                  although error and critical are probably not useful. The default value is "info".
       emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
-                 that errors within EMK can be debugged. The default value is "no".
-      threads -- Set the number of threads used by EMK for building. May be either a positive number, or "x".
-                 If the value is a number, EMK will use that many threads for building; if the value is "x",
-                 EMK will use as many threads as there are cores on the build machine. The default value is "x".
+                 that errors within emk can be debugged. The default value is "no".
+      threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
+                 If the value is a number, emk will use that many threads for building; if the value is "x",
+                 emk will use as many threads as there are cores on the build machine. The default value is "x".
       style   -- Set the log style mode. May be one of ["no", "console", "html"]. If set to "no", log output styling
                  is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
                  on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then

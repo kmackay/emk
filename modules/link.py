@@ -12,7 +12,7 @@ class _GccLinker(object):
     """
     Linker class for using gcc/g++ to link.
     
-    In order for the EMK link module to use a linker instance, the linker class must define the following methods:
+    In order for the emk link module to use a linker instance, the linker class must define the following methods:
       contains_main_function
       create_static_lib
       static_lib_threadsafe
@@ -284,15 +284,15 @@ need_depdirs = {}
 
 class Module(object):
     """
-    EMK module for linking compiled code (ie, .o files) into libraries/executables. Depends on the utils module.
+    emk module for linking compiled code (ie, .o files) into libraries/executables. Depends on the utils module.
     
-    This module defines EMK rules during the second prebuild stage, so that the c module's prebuild step is executed
+    This module defines emk rules during the second prebuild stage, so that the c module's prebuild step is executed
     before any link rules are defined. Future modules that create linkable files (eg assembler?) could work in a similar manner
     to the c module, adding to the link.objects dict during the prebuild stage.
     
     By default, the link module will autodetect object files that contain a main() function; those object files will
     each be linked into an executable. The other files (that do not contain main()) are linked into a static library,
-    which is used when linking the executables. You may specify dependencies on other directories managed by EMK
+    which is used when linking the executables. You may specify dependencies on other directories managed by emk
     (in the same project or a different proeject); the static libraries from those directories will be linked in as well.
     
     You can also build a shared library instead of or in addition to the static library. Note that on many platforms,
@@ -370,7 +370,7 @@ class Module(object):
       obj_nosrc    -- A list of object files for which the source file is not known.
       non_lib_objs -- A list of object files which should not be linked into a library (static or shared).
       
-      depdirs      -- A list of directories that the object files in this directory depend on. The link module will instruct EMK
+      depdirs      -- A list of directories that the object files in this directory depend on. The link module will instruct emk
                       to recurse into these directories. When linking, the flags, static libs, and syslibs from these directory
                       dependencies will be included in the link (including any from depdirs of the depdirs, and so on - the flags
                       and libs are gathered transitively). It is acceptable to have circular dependencies in the depdirs.

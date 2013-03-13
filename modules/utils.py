@@ -11,7 +11,7 @@ log = logging.getLogger("emk.utils")
 
 class Module(object):
     """
-    EMK utility module - when you call emk.module("utils") you will get an instance of this class.
+    emk utility module - when you call emk.module("utils") you will get an instance of this class.
     """
     def __init__(self, scope):
         self._clean_rules = 0
@@ -190,7 +190,7 @@ class Module(object):
 
     def mark_virtual_rule(self, produces, requires):
         """
-        Define an EMK rule to mark the productions as virtual.
+        Define an emk rule to mark the productions as virtual.
         
         Arguments:
           produces -- The paths to mark as virtual when the rule is executed.
@@ -200,19 +200,19 @@ class Module(object):
         
     def mark_virtual(self, produces, requires):
         """
-        EMK rule function to mark the productions as virtual.
+        emk rule function to mark the productions as virtual.
         """
         emk.mark_virtual(produces)
     
     def copy_rule(self, source, dest):
         """
-        Define an EMK rule to copy a file.
+        Define an emk rule to copy a file.
         
         The file will only be copied if the source differs from the destination (or the destination does not yet exist).
         Directories containing the destination that do not exist will be created.
         
         Arguments:
-          source -- The source file to copy; it treated as an EMK dependency (so if there is a rule that produces the source,
+          source -- The source file to copy; it treated as an emk dependency (so if there is a rule that produces the source,
                     that rule will be executed before the copy rule is).
           dest   -- The path to copy the file to; must include the destination file name (ie not just the directory).
         """
@@ -220,7 +220,7 @@ class Module(object):
     
     def copy_file(self, produces, requires):
         """
-        EMK rule function to copy a single file.
+        emk rule function to copy a single file.
         """
         dest = produces[0]
         src = requires[0]
@@ -259,7 +259,7 @@ class Module(object):
     
     def do_cleanup(self, produces, requires, patterns):
         """
-        EMK rule function to clean up (remove) files based on glob patterns.
+        emk rule function to clean up (remove) files based on glob patterns.
         """
         for pattern in patterns:
             for f in glob.glob(pattern):
