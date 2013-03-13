@@ -1,0 +1,121 @@
+# This example global emk config file sets up emk to support compilation using gcc for OS X (by default) or cross compilation to Linux or Windows.
+# It is assumed to be run on an OS X machine.
+# This config file sets things up so you can pass in 'os=<platform>' to tell emk to build for the target platform. Possible platforms
+# are osx, linux, or mswin. You can also specify 'arch=<arch>' to tell emk which target architecture to build for (x86 or x86_64).
+# The default architecture is x86.
+
+# Build output for a given platform will be put into __build__/<platform>/<arch> for each directory that emk recurses into.
+
+# First we setup the build directory based on the target platform (OS X by default)
+# Note that if we are cleaning and no target platform has been specified, we leave the build directory as the default
+# so that all platforms are cleaned.
+def setup_build_dir():
+    build_os = None
+    if "os" in emk.options:
+        build_os = emk.options["os"]
+    else:
+        emk.options["os"] = "osx"
+        if not emk.cleaning:
+            build_os = "osx"
+    
+    build_arch = emk.options.setdefault("arch", None)
+    
+    dirs = ["__build__"]
+    if build_os:
+        dirs.append(build_os)
+    if build_arch:
+        dirs.append(build_arch)
+    
+    emk.build_dir = os.path.join(*dirs)
+setup_build_dir()
+
+# We load the c and link modules since we will be configuring them for the target platform.
+c, link = emk.module("c", "link")
+
+# next we define functions for the platform-specific configuration
+def setup_osx():
+    global c
+    global link
+    
+    # Set up C/C++ flags for OS X
+    flags = ["-Wnewline-eof", "-D__DARWIN_UNIX03=0"]
+    c.flags.extend(flags)
+    
+    # By default, we set it up to build fat files for x86 and x86_64.
+    # Note that the c module will remove duplicate flags. If you have compound flags like -arch <arch>, you should put them
+    # in a tuple; they will be unpacked before they are passed to the compiler.
+    archs = ["i386", "x86_64"]
+    if emk.options["arch"] == "x86":
+        archs = ["i386"]
+    elif emk.options["arch"] == "x86_64":
+        archs = ["x86_64"]
+    
+    for arch in archs:
+        c.flags.append(("-arch", arch))
+    
+    # Set up linker flags. We use local_flags because this is the global config, so there is no need to inherit
+    # the flags from library dependencies.
+    for arch in archs:
+        link.local_flags.append(("-arch", arch))
+
+def setup_linux():
+    global c
+    global link
+    
+    # set up some flags that are arch-independent
+    link.local_libflags.append("-Wl,--no-undefined")
+    link.shared_lib_ext = ".so"
+    c.flags.append("-fpic")
+    
+    build_arch = "x86"
+    if emk.options["arch"] in linux_arch_setup:
+        build_arch = emk.options["arch"]
+    
+    # Set up the cross compiler/linker for Linux. It is assumed that the cross compiler is installed in /cross/linux/<arch>.
+    if build_arch == "x86_64":
+        c.compiler = c.GccCompiler("/cross/linux/x86_64/bin/x86_64-linux-gnu-")
+        link.linker = link.GccLinker("/cross/linux/x86_64/bin/x86_64-linux-gnu-")
+    else:
+        # we assume x86 by default
+        c.compiler = c.GccCompiler("/cross/linux/x86/bin/i686-pc-linux-gnu-")
+        link.linker = link.GccLinker("/cross/linux/x86/bin/i686-pc-linux-gnu-")
+
+# For mswin, we use mingw64 and configure it to build for x86 or x86_64.
+def setup_mswin():
+    global c
+    global link
+
+    c.compiler = c.GccCompiler("/cross/mingw64/bin/x86_64-w64-mingw32-")
+    link.linker = link.GccLinker("/cross/mingw64/bin/x86_64-w64-mingw32-")
+    # We need to set up the main() symbol regex (for the nm output) since the symbols are different depending on the architecture.
+    # We also need to look for WinMain()
+    if emk.options["arch"] == "x86_64":
+        link.linker.main_nm_regex = re.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)
+    else:
+        link.linker.main_nm_regex = re.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)
+    # Set up the source-code main() regex to also look for WinMain()
+    link.main_function_regex = re.compile(r'(int\s+main\s*\()|(WinMain\s*\()')
+    
+    # Set up some common copmilation flags.
+    flags = ["-mthreads", "-mno-ms-bitfields", "-DWINVER=0x0550"]
+    c.flags.extend(flags)
+    
+    # Set up the file naming conventions.
+    link.exe_ext = ".exe"
+    link.shared_lib_ext = ".dll"
+    link.static_lib_ext = ".lib"
+    link.lib_prefix = ""
+
+    # Set up the arch-specific flags.
+    arch_flags = ["-m32"]
+    link_flags = ["-m32", "-mthreads"]
+    if emk.options["arch"] == "x86_64":
+        arch_flags = ["-m64", "-DMS_WIN64=1"]
+        link_flags = ["-m64", "-mthreads"]
+    c.flags.extend(arch_flags)
+    link.local_flags.extend(link_flags)
+
+# Finally we call the appropriate setup function (if we are not cleaning)
+setup_funcs = {"osx":setup_osx, "linux":setup_linux, "mswin":setup_mswin}
+if not emk.cleaning and emk.options["os"] in setup_funcs:
+    setup_funcs[emk.options["os"]]()
