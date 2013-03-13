@@ -43,11 +43,11 @@ Documentation
 
 Run `emk -h` for basic usage information.
 
-[Tutorial](docs/tutorial.md)
-[Manual](docs/manual.md)
-[Utility Module](docs/modules/utils.md)
-[C/C++ Module](docs/modules/c.md)
-[Link Module](docs/modules/link.md)
-[Java Module](docs/modules/java.md)
+ * [Tutorial](docs/tutorial.md)
+ * [Manual](docs/manual.md)
+ * [Utility Module](docs/modules/utils.md)
+ * [C/C++ Module](docs/modules/c.md)
+ * [Link Module](docs/modules/link.md)
+ * [Java Module](docs/modules/java.md)
 
 There are also docstrings with detailed documentation for all public API functions/properties in the emk source code.
