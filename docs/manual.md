@@ -26,7 +26,7 @@ Recognized options:
             on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
             be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
             itself as a subprocess). The default value is "console".
-
+<!-- -->
 Note that you can pass in other options that may be interpreted by the various config files.
 
 Scopes
