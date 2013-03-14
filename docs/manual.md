@@ -14,18 +14,18 @@ or not they are recognized by emk) can be accessed via the emk.options dict.
 If no explicit targets are specified, emk will build all autobuild targets.
 
 Recognized options:
-  * log -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"], 
-           although error and critical are probably not useful. The default value is "info".
-  * emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
-               that errors within emk can be debugged. The default value is "no".
-  * threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
-               If the value is a number, emk will use that many threads for building; if the value is "x",
-               emk will use as many threads as there are cores on the build machine. The default value is "x".
-  * style -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no", log output styling
-             is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
-             on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
-             be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
-             itself as a subprocess). The default value is "console".
+ * log -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"], 
+          although error and critical are probably not useful. The default value is "info".
+ * emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
+              that errors within emk can be debugged. The default value is "no".
+ * threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
+              If the value is a number, emk will use that many threads for building; if the value is "x",
+              emk will use as many threads as there are cores on the build machine. The default value is "x".
+ * style -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no", log output styling
+            is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
+            on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
+            be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
+            itself as a subprocess). The default value is "console".
 
 Scopes
 ------
@@ -107,13 +107,14 @@ time or when the module isntance is created) since this will probably lead to an
 
 ### Loading Modules
 
-To load a module (or multiple modules) at any time (except when executing a rule), use `emk.module(names)`
+To load a module (or multiple modules) at any time (except when executing a rule), use `emk.module(names)`:
+
 Arguments:
  * names -- The list of modules names (or a single name) to load into the current scope.
 
-> Returns the list of module instances corresponding to the given module names; None will be in the list for each module
-> that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
-> so that you can write `mymod = emk.module("my_module")`, but also write `c, link = emk.module("c", "link")`).
+`emk.module(names)` returns the list of module instances corresponding to the given module names; None will be in the list for each module
+that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
+so that you can write `mymod = emk.module("my_module")`, but also write `c, link = emk.module("c", "link")`).
 
 You can also use `emk.weak_module` to load one or emk modules into the current scope, without causing their post_<scope type>() methods to be called.
 
@@ -180,6 +181,7 @@ It is a build error to declare more than one rule that produces the same target.
 
 If you have an existing rule function and you want to specify a build rule that uses that function, you should use
 `emk.rule(func, produces, requires, *args, **kwargs)`
+
 Arguments:
  * func -- The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
  * produces -- List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
