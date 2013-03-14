@@ -1768,7 +1768,7 @@ class EMK(EMK_Base):
         The post_* method is called after the corresponding scope has been fully loaded (eg, after the emk_rules.py file
         has been imported for the rules scope).
         
-        Modules should only add emk rules in the post_* methods (or later, if the post_* method uses emk.do_later(),
+        Modules should only add emk rules in the post_rules method (or later, if the post_rules method uses emk.do_later(),
         emk.prebuild(), or emk.postbuild()).
         
         It is advisable to avoid having a circular dependency between emk modules (if the modules load each other at import
@@ -2372,10 +2372,11 @@ def main(args):
       threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
                  If the value is a number, emk will use that many threads for building; if the value is "x",
                  emk will use as many threads as there are cores on the build machine. The default value is "x".
-      style   -- Set the log style mode. May be one of ["no", "console", "html"]. If set to "no", log output styling
+      style   -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no", log output styling
                  is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
                  on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
-                 be styled using CSS. The default value is "console".
+                 be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
+                 itself as a subprocess). The default value is "console".
     """
     try:
         setup(args).run(os.getcwd())
