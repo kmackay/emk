@@ -1,10 +1,13 @@
 import os
 import logging
 import shlex
+import re
 
 log = logging.getLogger("emk.c")
 
 utils = emk.module("utils")
+
+fix_path_regex = re.compile(r'[\W]+')
 
 class _GccCompiler(object):
     """
@@ -151,9 +154,12 @@ class Module(object):
                      as possible (see autodetect_from_targets). The default value is True.
       autodetect_from_targets -- Whether or not to autodetect generated code based on rules defined in the current scope.
                                  The default value is True.
-      excludes    -- A list of source files to exclude from compilation.
-      non_lib_src -- A list of source files that will not be linked into a library for this directory (passed to the link module).
-      non_exe_src -- A list of source files that will not be linked into an executable, even if they contain a main() function.
+      excludes     -- A list of source files to exclude from compilation.
+      non_lib_src  -- A list of source files that will not be linked into a library for this directory (passed to the link module).
+      non_exe_src  -- A list of source files that will not be linked into an executable, even if they contain a main() function.
+      unique_names -- If True, the output object files will be named according to the path from the project directory, to avoid
+                      naming conflicts when the build directory is not a relative path. The default value is False.
+                      If True, the link module's unique_names property will also be set to True.
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
@@ -188,6 +194,8 @@ class Module(object):
             self.excludes = list(parent.excludes)
             self.non_lib_src = list(parent.non_lib_src)
             self.non_exe_src = list(parent.non_exe_src)
+            
+            self.unique_names = parent.unique_names
         else:
             self.compiler = _GccCompiler()
             
@@ -214,6 +222,8 @@ class Module(object):
             self.excludes = []
             self.non_lib_src = []
             self.non_exe_src = []
+            
+            self.unique_names = False
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -229,6 +239,8 @@ class Module(object):
             return
         
         emk.do_prebuild(self._prebuild)
+        if self.unique_names and self.link:
+            self.link.unique_names = True
     
     def _prebuild(self):
         c_sources = set()
@@ -292,12 +304,17 @@ class Module(object):
     def _add_rule(self, objs, src, args):
         fname = os.path.basename(src)
         n, ext = os.path.splitext(fname)
+        if self.unique_names:
+            relpath = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
+            n = relpath + "_" + n
+            
         name = n
         c = 1
         while name in objs:
             name = "%s_%s" % (n, c)
             c += 1
         objs[name] = src
+        
         if self.link:
             objpath = os.path.join(emk.build_dir, name + ".o")
             if src in self._non_exe_src:

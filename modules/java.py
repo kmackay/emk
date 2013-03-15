@@ -2,6 +2,7 @@ import os
 import logging
 import re
 import shutil
+import hashlib
 
 log = logging.getLogger("emk.java")
 utils = emk.module("utils")
@@ -12,6 +13,8 @@ dir_cache = {}
 comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
 package_regex = re.compile(r'package\s+(\S+)\s*;')
 main_function_regex = re.compile(r'((public\s+static)|(static\s+public))\s+void\s+main\s*\(')
+
+fix_path_regex = re.compile(r'[\W]+')
 
 class Module(object):
     """
@@ -62,6 +65,8 @@ class Module(object):
                         jar file for the current directory (assuming make_jar is True). The default value is False.
       exe_jar_in_jar -- If True, the contents of all jar dependencies (ie, from depdirs and projdirs) will be included in the generated
                         jar files for executable classes (to allow a self-contained jar executable). The default value is True.
+      unique_names   -- If True, the output jar files will be named according to the path from the project directory, to avoid
+                        naming conflicts when the build directory is not a relative path. The default value is False.
       
       depdirs      -- A list of directories that the java files in this directory depend on. The java module will instruct emk
                       to recurse into these directories, and the java classes in those directories will be compiled before
@@ -104,6 +109,7 @@ class Module(object):
             self.jarname = parent.jarname
             self.jar_in_jar = parent.jar_in_jar
             self.exe_jar_in_jar = parent.exe_jar_in_jar
+            self.unique_names = parent.unique_names
             
             self.depdirs = list(parent.depdirs)
             self.projdirs = list(parent.projdirs)
@@ -130,13 +136,11 @@ class Module(object):
             self.jarname = None
             self.jar_in_jar = False
             self.exe_jar_in_jar = True
+            self.unique_names = False
             
             self.depdirs = []
             self.projdirs = []
             self.sysjars = []
-            
-            self.resource_dir = None
-            self.jar_dir = None
     
     def new_scope(self, scope):
         return Module(scope, parent=self)
@@ -232,11 +236,14 @@ class Module(object):
         emk.depend("java.__jar_contents__", deps)
         emk.depend("java.__jar_contents__", "java.__jar_resources__")
         
-        self._class_dir = os.path.join(emk.scope_dir, emk.build_dir, "classes")
-        self._resource_dir = os.path.join(emk.scope_dir, emk.build_dir, "resources")
+        hash = hashlib.md5(emk.scope_dir).hexdigest()
+        self._class_dir = os.path.join(emk.scope_dir, emk.build_dir, "java_classes_" + hash)
+        self._resource_dir = os.path.join(emk.scope_dir, emk.build_dir, "java_resources_" + hash)
         self._jar_dir = os.path.join(emk.scope_dir, emk.build_dir)
         
         dirname = os.path.basename(emk.scope_dir)
+        if self.unique_names:
+            dirname = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
         jarname = dirname + ".jar"
         if self.jarname:
             jarname = self.jarname
@@ -253,7 +260,11 @@ class Module(object):
             else:
                 emk.rule(self._make_jar, exe_jarpath, "java.__jar_contents__", self.exe_jar_in_jar, threadsafe=True, ex_safe=True)
             for exe in exe_class_set:
-                specific_jarname = exe + ".jar"
+                if self.unique_names:
+                    dirname = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
+                    specific_jarname = dirname + "_" + exe + ".jar"
+                else:
+                    specific_jarname = exe + ".jar"
                 specific_jarpath = os.path.join(self._jar_dir, specific_jarname)
                 emk.rule(self._make_exe_jar, specific_jarpath, exe_jarpath, exe, threadsafe=True, ex_safe=True)
                 emk.alias(specific_jarpath, specific_jarname)

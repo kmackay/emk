@@ -3,10 +3,13 @@ import sys
 import logging
 import re
 import shutil
+import hashlib
 
 log = logging.getLogger("emk.link")
 
 utils = emk.module("utils")
+
+fix_path_regex = re.compile(r'[\W]+')
 
 class _GccLinker(object):
     """
@@ -99,7 +102,7 @@ class _GccLinker(object):
         Create a static library (archive) containing the given object files and all object files contained in
         the given other libs (which will be static libraries as well).
         
-        Called by the link moduel to create a static library. If the link modules 'lib_in_lib' property is True,
+        Called by the link module to create a static library. If the link modules 'lib_in_lib' property is True,
         the link module will pass in the library dependencies of this library in the 'other_libs' argument. This
         method must include the contents of all the other libraries in the generated static library.
         
@@ -109,12 +112,13 @@ class _GccLinker(object):
           other_libs  -- A list of paths to other static libraries whose contents should be included in the generated static library.
         """
         objs = list(source_objs)
-        dump_dir = os.path.join(emk.scope_dir, emk.build_dir, "__lib_temp__")
+        hash = hashlib.md5(emk.scope_dir).hexdigest()
+        dump_dir = os.path.join(emk.scope_dir, emk.build_dir, "__lib_temp__" + hash)
         utils.mkdirs(dump_dir)
 
         counter = 0
         for lib in other_libs:
-            d = os.path.join(dump_dir,"%d" % (counter))
+            d = os.path.join(dump_dir, "%d" % (counter))
             shutil.rmtree(d, ignore_errors=True)
             os.mkdir(d)
             
@@ -362,6 +366,8 @@ class Module(object):
                          and transitively all 'static_libs', 'depdirs', and 'projdirs' libraries - ie the link module will recursively
                          gather all the static library dependencies from all the dependency directories. Useful for generating a
                          single static library for release that contains all of its dependencies.
+      unique_names    -- If True, the output libraries/executables will be named according to the path from the project directory, to avoid
+                         naming conflicts when the build directory is not a relative path. The default value is False.
       
       exe_objs     -- A list of object files to link into executables (without checking whether they contain a main() function).
       non_exe_objs -- A list of object files that should not be linked into an executable, even if they contain a main() function.
@@ -429,6 +435,7 @@ class Module(object):
             self.make_shared_lib = parent.make_shared_lib
             self.strip = parent.strip
             self.lib_in_lib = parent.lib_in_lib
+            self.unique_names = parent.unique_names
             
             self.exe_objs = list(parent.exe_objs)
             self.non_exe_objs = list(parent.non_exe_objs)
@@ -475,6 +482,7 @@ class Module(object):
             self.make_shared_lib = False
             self.strip = False
             self.lib_in_lib = False
+            self.unique_names = False
             
             self.exe_objs = []
             self.non_exe_objs = []
@@ -559,11 +567,20 @@ class Module(object):
         if self.detect_exe == "exact":
             emk.require_rule("link.__static_lib__", "link.__lib_in_lib__", "link.__shared_lib__", "link.__exe_deps__", "link.__exes__")
             dirname = os.path.basename(emk.scope_dir)
+            if self.unique_names:
+                dirname = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
+                
             if self.make_static_lib:
-                libname = self.lib_prefix + dirname + self.static_lib_ext
-                emk.require_rule(os.path.join(emk.build_dir, libname))
                 if self.lib_in_lib:
-                    libname = self.lib_prefix + dirname + "_all" + self.static_lib_ext
+                    all_libname = libname = self.lib_prefix + dirname + "_all" + self.static_lib_ext
+                    only_libname = self.lib_prefix + dirname + self.static_lib_ext
+                    if self.static_libname:
+                        all_libname = self.static_libname
+                        only_libname = "only_" + self.static_libname
+                    emk.require_rule(os.path.join(emk.build_dir, all_libname))
+                    emk.require_rule(os.path.join(emk.build_dir, only_libname))
+                else:
+                    libname = self.lib_prefix + dirname + self.static_lib_ext
                     if self.static_libname:
                         libname = self.static_libname
                     emk.require_rule(os.path.join(emk.build_dir, libname))
@@ -625,11 +642,18 @@ class Module(object):
         emk.depend("link.__exe_deps__", self._all_static_libs)
         
         dirname = os.path.basename(emk.scope_dir)
+        if self.unique_names:
+            dirname = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
         making_static_lib = False
         if lib_objs:
             if self.make_static_lib:
                 making_static_lib = True
                 libname = self.lib_prefix + dirname + self.static_lib_ext
+                if self.static_libname:
+                    if self.lib_in_lib:
+                        libname = "only_" + self.static_libname
+                    else:
+                        libname = self.static_libname
                 libpath = os.path.join(emk.build_dir, libname)
                 self._static_libpath = libpath
                 emk.rule(self._create_static_lib, libpath, lib_objs, False, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True)
@@ -665,6 +689,10 @@ class Module(object):
         for obj in exe_objs:
             basename = os.path.basename(obj)
             n, ext = os.path.splitext(basename)
+            if self.unique_names:
+                relpath = fix_path_regex.sub('_', os.path.relpath(emk.scope_dir, emk.proj_dir))
+                n = relpath + "_" + n
+            
             name = n
             c = 1
             while name in exe_names:

@@ -275,14 +275,26 @@ class _Clean_Module(object):
     def new_scope(self, scope):
         return _Clean_Module(scope, self)
     
+    def remove_cache(self, build_dir):
+        hash = hashlib.md5(emk.scope_dir).hexdigest()
+        cache_path = os.path.join(build_dir, "__emk_cache__" + hash)
+        _clean_log.debug("Removing cache %s", cache_path)
+        try:
+            os.remove(cache_path)
+        except OSError:
+            pass
+    
     def clean_func(self, produces, requires):
         build_dir = os.path.realpath(os.path.join(emk.scope_dir, emk.build_dir))
         if self.remove_build_dir:
             if os.path.commonprefix([build_dir, emk.scope_dir]) == emk.scope_dir:
                 _clean_log.info("Removing directory %s", build_dir)
                 shutil.rmtree(build_dir, ignore_errors=True)
+            else:
+                self.remove_cache(build_dir)
         else:
-            _clean_log.info("Not removing directory %s", build_dir)
+            self.remove_cache(build_dir)
+        
         emk.mark_virtual(*produces)
     
     def post_rules(self):
@@ -527,7 +539,14 @@ def _make_target_abspath(rel_path, scope):
     """
     if rel_path.startswith(emk.proj_dir_placeholder):
         rel_path = rel_path.replace(emk.proj_dir_placeholder, scope.proj_dir, 1)
-    path = rel_path.replace(emk.build_dir_placeholder, scope.build_dir)
+    if os.path.isabs(scope.build_dir):
+        start, sep, end = rel_path.partition(emk.build_dir_placeholder)
+        if sep:
+            path = os.path.realpath(scope.build_dir + end)
+        else:
+            path = rel_path
+    else:
+        path = rel_path.replace(emk.build_dir_placeholder, scope.build_dir)
     return os.path.realpath(_make_abspath(path, scope))
 
 def _make_require_abspath(rel_path, scope):
@@ -723,7 +742,11 @@ class EMK_Base(object):
             if build:
                 d = os.path.dirname(begin)
                 if d in self._known_build_dirs:
-                    n = begin + self._known_build_dirs[d] + end
+                    bd = self._known_build_dirs[d]
+                    if os.path.isabs(bd):
+                        n = os.path.realpath(bd + end)
+                    else:
+                        n = begin + bd + end
                     updated_paths.append(n)
                     self.log.debug("Fixed %s in path: %s => %s" % (self.build_dir_placeholder, path, n))
                 else:
@@ -1287,7 +1310,8 @@ class EMK_Base(object):
     
     def _load_scope_cache(self, scope):
         if not self.cleaning:
-            cache_path = os.path.join(scope.dir, scope.build_dir, "__emk_cache__")
+            hash = hashlib.md5(scope.dir).hexdigest()
+            cache_path = os.path.join(scope.dir, scope.build_dir, "__emk_cache__" + hash)
             try:
                 with open(cache_path, "rb") as f:
                     scope._cache = pickle.load(f)
@@ -1306,7 +1330,8 @@ class EMK_Base(object):
         if self.cleaning:
             return
         for path, scope in self._visited_dirs.items():
-            cache_path = os.path.join(path, scope.build_dir, "__emk_cache__")
+            hash = hashlib.md5(path).hexdigest()
+            cache_path = os.path.join(path, scope.build_dir, "__emk_cache__" + hash)
             if scope._cache:
                 try:
                     with open(cache_path, "wb") as f:
