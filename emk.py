@@ -1956,7 +1956,7 @@ class EMK(EMK_Base):
         
         If emk determines that a target needs to be built, it will examine the dependencies of the rule that produces
         that target. The primary dependencies are defined by the "requires" argument when the rule is created. The
-        secondary dependencies of the rule are the set of secodary dependencies of all products of that rule, which are
+        secondary dependencies of the rule are the set of secondary dependencies of all products of that rule, which are
         added using emk.depend(). All primary and secondary dependencies of a rule are built by emk before the rule is executed.
         
         Arguments:
@@ -2034,7 +2034,7 @@ class EMK(EMK_Base):
         """
         Mark the given targets as autobuild.
         
-        If no explicit targets are passed in on the command line, emk will build all targets taht have been
+        If no explicit targets are passed in on the command line, emk will build all targets that have been
         marked as atuobuild. emk will also build all autobuild targets when the explicit targets cannot be
         fully built due to missing rules or dependencies.
         
@@ -2262,7 +2262,7 @@ class EMK(EMK_Base):
         """
         Retrieve the generic cache for a given key string in the current scope. This cache is kept separate from the rule cache.
         
-        The cache can be used to store information between emk invocations. The cache be retrieved and modified
+        The cache can be used to store information between emk invocations. The cache can only be retrieved and modified
         when you are in rules scope (since the cache is scope-specific).
         
         Arguments:
