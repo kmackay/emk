@@ -1533,10 +1533,10 @@ class EMK(EMK_Base):
                        (eg, the directory from which the emk_<scope name>.py file was loaded).
       local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
                        (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
-      current_rule  -- The currently exceuting rule (an emk.Rule instance), or None if a rule is not being executed.
+      current_rule  -- The currently executing rule (an emk.Rule instance), or None if a rule is not being executed.
       
     Scoped modifiable properties (inherited by child scopes):
-      build_dir       -- The relative path to the build output directory.
+      build_dir       -- The build directory path (may be relative or absolute). The default value is "__build__".
       module_paths    -- Additional absolute paths to search for modules.
       default_modules -- Modes that are loaded if no emk_rules.py file is present.
       pre_modules     -- Modules that are preloaded before each emk_rules.py file is loaded.

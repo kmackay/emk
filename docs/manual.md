@@ -1,5 +1,5 @@
-Manual
-======
+emk Manual
+==========
 
 emk is a Python script that gathers build rules from various config files and executes them depending on the user-specified targets.
 
@@ -32,16 +32,22 @@ Note that you can pass in other options that may be interpreted by the various c
 Scopes
 ------
 
-Using the module system, you can specify configuration at a global or project level, and then override that configuration for specific directories. The module system is based on 'scopes'; when you load a module in a given scope, emk will see if that module has been loaded in a parent scope. If it has, the module for the current scope will be initialized from the parent scope's module (otherwise the module will be initialized to its default settings). This behaviour is module-specific but typically involves copying the configuration values set in the parent scope's module to the new module instance. This allows configuration does in the parent scope to be overridden in the current scope.
+With emk, you can specify configuration at a global or project level, and then override that configuration for specific directories.
+The configuration system is based on 'scopes'; scopes apply to certain emk configuration properties, as well as the module system.
+The basic idea is when you enter a new scope, configuration from the parent scope is copied into the new scope; it can then be modified
+in the new scope to override configuration as desired without changing the parent scope's configuration.
 
-Note that whenever a config file is loaded, the current working directory of emk is changed to the directory containing the config file.
+When you load a module in a given scope, emk will see if that module has been loaded in a parent scope. If it has, the module for the
+current scope will be initialized from the parent scope's module (otherwise the module will be initialized to its default settings).
+This behaviour is module-specific but typically involves copying the configuration values set in the parent scope's module to the new module instance.
 
 Loading Sequence
----------------
+----------------
 
 The build process in a given directory goes as follows:
-  1. Load the global emk config from `<emk dir>/config/emk_global.py` (where <emk dir> is the directory containing the emk.py module), if it exists and has not
-     already been loaded (creates the global/root scope). Note that the global config file may be a symlink.
+  1. Load the global emk config from `<emk dir>/config/emk_global.py` (where <emk dir> is the directory containing the emk.py module),
+     if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
+     working directory to the directory containing the config file. Note that the global config file may be a symlink.
   2. Find the project directory. The project directory is the closest ancestor to the current directory that
      contains an `emk_project.py` file, or the root directory if no project file is found. The project directory for the current directory
      is available via `emk.proj_dir`.
@@ -74,6 +80,55 @@ Note that if new postbuild functions are added during the postbuild stage, they 
 Finally, any new directories are recursed into. If there is still work left to do (ie, unbuilt targets), emk will start
 a new build phase (returning to the prebuild stage). Build phases will continue until all targets are built, or until
 there is nothing left to do. If there are unbuilt targets after building has stopped, a build error is raised.
+
+Build Directory
+---------------
+
+emk has a configurable build directory. This is used to store emk's cache, and is also where build products (from the supplied modules)
+are put. By default, the build directory is a relative path ("__build__"); this means that the cache and build products for a given directory
+that is being built (ie, a directory containing an `emk_rules.py` file) will be put into an "__build__" subdirectory of that directory.
+The build directory may also be an absolute path, in which case build products for multiple directories may be put into that directory.
+
+The build directory is a scoped property of emk (`emk.build_dir`). This means that you can modify it in `emk_global.py`, `emk_project.py`,
+or `emk_subproj.py`. However you cannot change the build directory in `emk_rules.py` - this is to make it consistent for a given directory.
+
+emk Object
+----------
+
+Whenever emk is running, the `emk` object is available as a builtin. You do not need to (and should not) try to import emk in your emk modules
+or config files; you can just use emk.<whatever> directly.
+
+### Global read-only properties (not based on current scope):
+ * log  -- The emk log (named 'emk'). Modules should create sub-logs of this to use the emk logging features.
+ * formatter -- The formatter instance for the emk log.
+ * ALWAYS_BUILD -- A special token. When used as a rule requirement, ensures that the rule will always be executed.
+ * cleaning -- True if "clean" has been passed as an explicit target; false otherwise.
+ * building -- True when rules are being executed, false at other times.
+ * emk_dir -- The directory which contains the emk module.
+ * options -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value). You can modify the contents of this dict.
+ * explicit_targets -- The set of explicit targets passed to emk (ie, all arguments that are not options).
+
+### Global modifiable properties:
+ * default_has_changed -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
+                        function should take a single argument which is the absolute path of the thing to check to see if it has changed.
+                        When this function is executing, emk.current_rule and emk.rule_cache() are available.
+ * build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
+ * proj_dir_placeholder -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
+
+### Scoped read-only properties (apply only to the current scope):
+ * scope_name -- The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
+ * proj_dir -- The absolute path of the project directory for the current scope.
+ * scope_dir -- The absolute path of the directory in which the scope was created
+                (eg, the directory from which the emk_<scope name>.py file was loaded).
+ * local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
+                    (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
+ * current_rule -- The currently executing rule (an emk.Rule instance), or None if a rule is not being executed.
+  
+### Scoped modifiable properties (inherited by child scopes):
+ * build_dir -- The build directory path (may be relative or absolute). The default value is "__build__".
+ * module_paths -- Additional absolute paths to search for modules.
+ * default_modules -- Modes that are loaded if no emk_rules.py file is present.
+ * pre_modules -- Modules that are preloaded before each emk_rules.py file is loaded.
 
 Modules
 -------
@@ -205,6 +260,25 @@ Keyword arguments:
  * has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
                  have changed. The default value is `emk.default_has_changed`.
 
-If you have a one-off build rule, you may want to use a decorator to decorate the rule function instead, using
+If you have a one-off build rule, you may want to use a decorator on the rule function instead, using
 `@emk.make_rule(produces, requires, *args, **kwargs)`. The arguments are the same as for `emk.rule()`, except the rule function
 is the function being decorated.
+
+Cleaning
+--------
+
+emk has a built-in `clean` module that automatically creates a "clean" target. If you specify "clean" as a target when you call emk (`emk clean`),
+then `emk.cleaning` will be set to True, and no other explicit targets will be built.
+
+By default, when `emk clean` is called in a directory, the rule to make "clean" will remove the build directory for that directory if the build directory
+is a subdirectory of that directory (ie, is a relative path that does not use ".." or symlinks to point to something outside of the given directory).
+If the build directory is not a subdirectory, then `emk clean` will only delete the emk cache for that directory.
+
+You can change the configurable `clean.remove_build_dir` property of the `clean` module to False to prevent removing the build directory in all cases
+(for the configured scope).
+
+If you use `emk.subdir(path)` to instruct emk to recurse into other directories, `emk clean` will clean those directories as well. Directories specified
+using only `emk.recurse(path)` will not be cleaned.
+
+You can attach targets to the "clean" target to perform other tasks when `emk clean` is called. This is done for example by `utils.clean_rule()`
+and `emk.subdir()`.
