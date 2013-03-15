@@ -999,8 +999,6 @@ class EMK_Base(object):
                 self.log.debug("Modtime (virtual) for %s has changed; cached = %s, actual = %s", req.abs_path, cached_modtime, virtual_modtime)
                 cache["vmodtime"] = virtual_modtime
                 return True
-            else:
-                self.log.debug("Modtime (virtual) for %s has not changed (%s)", req.abs_path, cached_modtime)
             return False
     
     def default_has_changed(self, abs_path):
@@ -1023,8 +1021,6 @@ class EMK_Base(object):
                 self.log.debug("Modtime for %s has changed; cached = %s, actual = %s", abs_path, cached_modtime, modtime)
                 cache["modtime"] = modtime
                 return True
-            else:
-                self.log.debug("Modtime for %s has not changed (%s)", abs_path, cached_modtime)
             return False
         except OSError:
             return None
