@@ -111,7 +111,9 @@ class _Rule(object):
         self._remaining_unbuilt_reqs = 0
         self._want_build = False
         self._built = False
+        self._ran_func = False
         self.stack = []
+        self._req_trace = {}
 
 class _ScopeData(object):
     def __init__(self, parent, scope_type, scope_dir, proj_dir):
@@ -646,6 +648,10 @@ class EMK_Base(object):
         else:
             self._options["style"] = "console"
         
+        self.traces = set()
+        self._trace_unchanged = False
+        self._options["trace_unchanged"] = "no"
+        
         self._explicit_targets = set()
         for arg in args:
             if '=' in arg:
@@ -675,6 +681,10 @@ class EMK_Base(object):
                         if val not in stylers:
                             self.log.error("Unknown log style option '%s'", level)
                             val = "no"
+                    elif key == "trace":
+                        self.traces = set(val.split(','))
+                    elif key == "trace_unchanged" and val == "yes":
+                        self._trace_unchanged = True
                             
                     self._options[key] = val
             else:
@@ -760,6 +770,12 @@ class EMK_Base(object):
         for target in self._explicit_targets:
             fixed_targets.add(_make_target_abspath(target, self.scope))
         self._explicit_targets = fixed_targets
+    
+    def _fix_traces(self):
+        fixed_traces = set()
+        for trace in self.traces:
+            fixed_traces.add(_make_target_abspath(trace, self.scope))
+        self.traces = fixed_traces
     
     def _remove_artificial_targets(self):
         real_targets = {}
@@ -1029,6 +1045,7 @@ class EMK_Base(object):
         changed_reqs = []
         for req, weak in rule._required_targets:
             if req.abs_path is self.ALWAYS_BUILD:
+                c = True
                 changed_reqs.append(req.abs_path)
             else:
                 c = self._req_has_changed(rule, req)
@@ -1038,6 +1055,7 @@ class EMK_Base(object):
                         raise _BuildError("Failed to determine if %s has changed", req.abs_path)
                 elif c:
                     changed_reqs.append(req.abs_path)
+            rule._req_trace[req] = c
         return changed_reqs
     
     def _build_thread_func(self, special):
@@ -1075,6 +1093,7 @@ class EMK_Base(object):
                     if not rule.threadsafe:
                         os.chdir(rule.scope.dir)
                     rule.func(produces, rule.requires, *rule.args)
+                    rule._ran_func = True
 
                 self._local.current_rule = None
                 self._done_rule(rule, need_build)
@@ -1387,6 +1406,7 @@ class EMK_Base(object):
         
         if first_dir:
             self._fix_explicit_targets()
+            self._fix_traces()
         
         self._visited_dirs[path] = self.scope
         
@@ -1513,6 +1533,69 @@ class EMK_Base(object):
                 lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
             lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
             self.log.error('\n'.join(lines), extra={'adorn':False})
+    
+    def _trace_helper(self, rule, visited, to_visit):
+        if not rule:
+            return
+        
+        strings = []
+        for target, changed in rule._req_trace.items():
+            path = target.abs_path
+            if changed:
+                if self._options["style"] == "no":
+                    strings.append('*' + path + '*')
+                else:
+                    strings.append(_style_tag('red') + path + _style_tag(''))
+                if target not in visited:
+                    to_visit.append(target)
+            elif changed is not None:
+                strings.append(path)
+                if self._trace_unchanged and target not in visited:
+                    to_visit.append(target)
+            else:
+                strings.append('(' + path + ')')
+        
+        if rule._ran_func:
+            if self._options["style"] == "no":
+                s = ", ".join(['*' + p.abs_path + '*' for p in rule.produces])
+            else:
+                s = ", ".join([_style_tag('red') + p.abs_path + _style_tag('') for p in rule.produces])
+        else:
+            s = ", ".join([p.abs_path for p in rule.produces])
+        if strings:
+            s = s + " <= " + ", ".join(strings)
+        else:
+            s = s + " <= (none)" 
+        self.log.info(s)
+    
+    def _do_trace(self, target):
+        self.log.info("")
+        self.log.info(_style_tag('u') + "Trace for %s" % (target.abs_path) + _style_tag(''))
+        
+        self.log.info("Rules that require %s:" % (target.abs_path))
+        for r in target._required_by:
+            strings = [t.abs_path for t, weak in r._required_targets]
+            s = ", ".join([p.abs_path for p in r.produces])
+            if strings:
+                s = s + " <= " + ", ".join(strings)
+            else:
+                s = s + " <= (none)"
+            self.log.info("  " + s)
+        
+        self.log.info(_style_tag('bold') + "Dependency trace for %s:" % (target.abs_path) + _style_tag(''))
+        if self._options["style"] == "no":
+            self.log.info("Changed files are indicated by *<file>*")
+        else:
+            self.log.info("Changed files are in " + _style_tag('red') + "red" + _style_tag(''))
+        
+        visited = set()
+        to_visit = collections.deque()
+        to_visit.append(target)
+        while to_visit:
+            next = to_visit.popleft()
+            if next not in visited:
+                visited.add(next)
+                self._trace_helper(next.rule, visited, to_visit)
 
 class EMK(EMK_Base):
     """
@@ -1539,6 +1622,7 @@ class EMK(EMK_Base):
       options          -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value).
                           You can modify the contents of this dict.
       explicit_targets -- The set of explicit targets passed to emk (ie, all arguments that are not options).
+      traces           -- The set of targets that will be traced once the build is complete (for debugging).
     
     Global modifiable properties:
       default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
@@ -1738,6 +1822,16 @@ class EMK(EMK_Base):
         if self._explicit_targets:
             raise _BuildError("No rule creates these explicitly specified targets:", self._explicit_targets)
         
+        for trace_target in self.traces:
+            t = self._get_target(trace_target)
+            if t:
+                self._do_trace(t)
+            else:
+                self.log.info("")
+                self.log.info("Could not trace '%s' since there is no rule to build it." % (trace_target))
+            pass
+        if self.traces:
+            self.log.info("")
         
         for line in self._time_lines:
             self.log.info(line)
@@ -2117,6 +2211,21 @@ class EMK(EMK_Base):
                 self.log.debug("Requiring %s to be rebuilt if it has changed", abs_path)
                 self._rebuild_if_changed.add(abs_path)
     
+    def trace(self, *paths):
+        """
+        Indicate that the given targets should be traced for debugging purposes. The trace will be printed
+        after the build is complete.
+        
+        Arguments:
+          paths -- The list of target paths to trace. The paths may be absolute, or relative to the scope dir.
+                   Project and build dir placeholders will be resolved according to the current scope.
+        """
+        with self._lock:
+            for path in _flatten_gen(paths):
+                abs_path = _make_target_abspath(path, self.scope)
+                self.log.debug("Adding trace for %s", abs_path)
+                self.traces.add(abs_path)
+    
     def recurse(self, *paths):
         """
         Specify other directories for emk to visit.
@@ -2398,6 +2507,10 @@ def main(args):
                  on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
                  be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
                  itself as a subprocess). The default value is "console".
+      trace   -- Specify a set of targets to trace for debugging purposes. The trace for each target will be printed once the build is complete.
+                 The targets are specified as a list of comma-separated paths, which may be relative to the current directory or absolute.
+                 Build and project directory placeholders will be replaced based on the current directory.
+      trace_unchanged -- If set to "yes", the tracer will trace through targets that were not modified as well. The default value is "no".
     """
     try:
         setup(args).run(os.getcwd())
