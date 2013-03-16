@@ -26,6 +26,10 @@ Recognized options:
             on Windows). If set to "html", the log output will be marked up with &lt;div> and &lt;span> tags that can then
             be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
             itself as a subprocess). The default value is "console".
+ * trace -- Specify a set of targets to trace for debugging purposes. The trace for each target will be printed once the build is complete.
+            The targets are specified as a list of comma-separated paths, which may be relative to the current directory or absolute.
+            Build and project directory placeholders will be replaced based on the current directory.
+ * trace_unchanged -- If set to "yes", the tracer will trace through targets that were not modified as well. The default value is "no".
 
 Note that you can pass in other options that may be interpreted by the various config files.
 
@@ -116,6 +120,7 @@ or config files; you can just use emk.<whatever> directly.
  * emk_dir -- The directory which contains the emk module.
  * options -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value). You can modify the contents of this dict.
  * explicit_targets -- The set of explicit targets passed to emk (ie, all arguments that are not options).
+ * traces -- The set of targets that will be traced once the build is complete (for debugging).
 
 ### Global modifiable properties:
  * default_has_changed -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
@@ -369,3 +374,16 @@ the rules that depend on them. To do this, use `emk.require_rule(*paths)` for th
 Debugging the Build
 -------------------
 
+If you call `emk log=debug`, you will get a lot of additional information about the build process and what emk is doing, including which
+files have changed and why emk is executing rules.
+
+### Traces
+
+If you want to debug a specific target (to see why it is/isn't being built), you can trace it by using `emk trace=<target path(s)>`.
+You can pass in multiple targets to trace separated by ','. You can also programmatically add traces in any emk config file
+(eg `emk_rules.py`) using the `emk.trace(*paths)` function. Once the build is complete, emk will print out a trace for each traced target.
+The trace includes which rules depend on that target, and the dependency tree for the target. Changed dependencies will be output in red
+(depending on the log style).
+
+By default, the dependency tree trace will not follow unchanged files. If you want to force the tracer to trace unchanged files, pass the
+trace_unchanged=yes option to emk. Example: `emk trace=myprogram trace_unchanged=yes`.
