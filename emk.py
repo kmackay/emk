@@ -1568,6 +1568,8 @@ class EMK_Base(object):
                         strings.append('(' + path + ')')
                     else:
                         strings.append(_style_tag('blue') + path + _style_tag(''))
+                    if req not in visited:
+                        to_visit.append(req)
         
         if rule._ran_func:
             if self._options["style"] == "no":
