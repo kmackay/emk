@@ -1602,7 +1602,7 @@ class EMK_Base(object):
             self.log.info("Files that were not examined are indicated by (<file>)")
         else:
             self.log.info("Changed files (or files for which there was no cached info) are in " + _style_tag('red') + "red" + _style_tag(''))
-            self.log.info("Files that were not examined are in " + _style_tag('blue') + "blue" + _style_tag('')))
+            self.log.info("Files that were not examined are in " + _style_tag('blue') + "blue" + _style_tag(''))
         
         visited = set()
         to_visit = collections.deque()
