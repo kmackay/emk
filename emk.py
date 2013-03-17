@@ -1066,13 +1066,13 @@ class EMK_Base(object):
                 return
             
             try:
-                rule._built = True
-                
                 self._local.current_scope = rule.scope
                 self._local.current_rule = rule
 
                 need_build = False
                 changed_reqs = self._get_changed_reqs(rule)
+                rule._built = True
+                
                 if changed_reqs:
                     need_build = True
                     self.log.debug("Need to build %s because dependencies %s have changed", [t.abs_path for t in rule.produces], changed_reqs)
@@ -1539,21 +1539,35 @@ class EMK_Base(object):
             return
         
         strings = []
-        for target, changed in rule._req_trace.items():
-            path = target.abs_path
-            if changed:
-                if self._options["style"] == "no":
-                    strings.append('*' + path + '*')
+        if rule._built:
+            for target, changed in rule._req_trace.items():
+                path = target.abs_path
+                if changed:
+                    if self._options["style"] == "no":
+                        strings.append('*' + path + '*')
+                    else:
+                        strings.append(_style_tag('red') + path + _style_tag(''))
+                    if target not in visited:
+                        to_visit.append(target)
+                elif changed is not None:
+                    strings.append(path)
+                    if self._trace_unchanged and target not in visited:
+                        to_visit.append(target)
                 else:
-                    strings.append(_style_tag('red') + path + _style_tag(''))
-                if target not in visited:
-                    to_visit.append(target)
-            elif changed is not None:
-                strings.append(path)
-                if self._trace_unchanged and target not in visited:
-                    to_visit.append(target)
-            else:
-                strings.append('(' + path + ')')
+                    strings.append('<' + path + '>')
+        else:
+            for req, weak in rule._required_targets:
+                path = req.abs_path
+                if path is self.ALWAYS_BUILD:
+                    if self._options["style"] == "no":
+                        strings.append('*' + path + '*')
+                    else:
+                        strings.append(_style_tag('red') + path + _style_tag(''))
+                else:
+                    if self._options["style"] == "no":
+                        strings.append('(' + path + ')')
+                    else:
+                        strings.append(_style_tag('blue') + path + _style_tag(''))
         
         if rule._ran_func:
             if self._options["style"] == "no":
@@ -1584,9 +1598,11 @@ class EMK_Base(object):
         
         self.log.info(_style_tag('bold') + "Dependency trace for %s:" % (target.abs_path) + _style_tag(''))
         if self._options["style"] == "no":
-            self.log.info("Changed files are indicated by *<file>*")
+            self.log.info("Changed files (or files for which there was no cached info) are indicated by *<file>*")
+            self.log.info("Files that were not examined are indicated by (<file>)")
         else:
-            self.log.info("Changed files are in " + _style_tag('red') + "red" + _style_tag(''))
+            self.log.info("Changed files (or files for which there was no cached info) are in " + _style_tag('red') + "red" + _style_tag(''))
+            self.log.info("Files that were not examined are in " + _style_tag('blue') + "blue" + _style_tag('')))
         
         visited = set()
         to_visit = collections.deque()
@@ -1596,6 +1612,18 @@ class EMK_Base(object):
             if next not in visited:
                 visited.add(next)
                 self._trace_helper(next.rule, visited, to_visit)
+    
+    def _print_traces(self):
+        for trace_target in self.traces:
+            t = self._get_target(trace_target)
+            if t:
+                self._do_trace(t)
+            else:
+                self.log.info("")
+                self.log.info("Could not trace '%s' since there is no rule to build it." % (trace_target))
+            pass
+        if self.traces:
+            self.log.info("")
 
 class EMK(EMK_Base):
     """
@@ -1821,17 +1849,6 @@ class EMK(EMK_Base):
         
         if self._explicit_targets:
             raise _BuildError("No rule creates these explicitly specified targets:", self._explicit_targets)
-        
-        for trace_target in self.traces:
-            t = self._get_target(trace_target)
-            if t:
-                self._do_trace(t)
-            else:
-                self.log.info("")
-                self.log.info("Could not trace '%s' since there is no rule to build it." % (trace_target))
-            pass
-        if self.traces:
-            self.log.info("")
         
         for line in self._time_lines:
             self.log.info(line)
@@ -2526,3 +2543,5 @@ def main(args):
         emk.log.error('\n'.join(lines), extra={'adorn':False})
         emk._print_bad_rules()
         return 1
+    finally:
+        emk._print_traces()
