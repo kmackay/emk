@@ -43,10 +43,8 @@ Documentation
 
 Run `emk -h` for basic usage information.
 
-[Tutorial](docs/tutorial.md)
-
-[Manual](docs/manual.md)
-
+**[Tutorial](docs/tutorial.md)**  
+**[Manual](docs/manual.md)**
 ### Modules
 [Module Howto](docs/modules/howto.md)
  * [Utility Module](docs/modules/utils.md)
