@@ -1600,10 +1600,10 @@ class EMK_Base(object):
         self.log.info(_style_tag('bold') + "Dependency trace for %s:" % (target.abs_path) + _style_tag(''))
         if self._options["style"] == "no":
             self.log.info("Changed files (or files for which there was no cached info) are indicated by *<file>*")
-            self.log.info("Files that were not examined are indicated by (<file>)")
+            self.log.info("Files that were not examined (due to a build error) are indicated by (<file>)")
         else:
             self.log.info("Changed files (or files for which there was no cached info) are in " + _style_tag('red') + "red" + _style_tag(''))
-            self.log.info("Files that were not examined are in " + _style_tag('blue') + "blue" + _style_tag(''))
+            self.log.info("Files that were not examined (due to a build error) are in " + _style_tag('blue') + "blue" + _style_tag(''))
         
         visited = set()
         to_visit = collections.deque()
