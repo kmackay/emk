@@ -46,7 +46,6 @@ Run `emk -h` for basic usage information.
 **[Tutorial](docs/tutorial.md)**  
 **[Manual](docs/manual.md)**
 ### Modules
-[Module Howto](docs/modules/howto.md)
  * [Utility Module](docs/modules/utils.md)
  * [C/C++ Module](docs/modules/c.md)
  * [Link Module](docs/modules/link.md)
