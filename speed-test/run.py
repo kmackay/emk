@@ -29,5 +29,5 @@ for num in tests:
     else:
         print("Error running test for %d" % (num * 1000))
         break
-    print("Finished %d file compile test")
+    print("Finished %d file compile test" % (num * 1000))
     
