@@ -67,9 +67,10 @@ class _Rule(object):
                      All primary dependencies of a rule are built before the rule is built. If a primary dependency does not
                      exist, a build error is raised.
       args        -- The arbitrary args that will be passed (unpacked) to the rule function (specified when the rule was created).
-      threadsafe  -- Whether or not the rule is threadsafe (True or False). Specified when the rule was created. Non-threadsafe rules are executed
-                     sequentially in a single thread, and the current working directory of the process is set the the scope dir for the rule
-                     before it is executed. Threadsafe rules may be executed concurrently with any other rules, and the current working directory is not set.
+      cwd_safe    -- Whether or not the rule is cwd-safe (True or False). Specified when the rule was created. 
+                     cwd-unsafe rules are executed sequentially in a single thread, and the current working directory
+                     of the process is set the the scope dir for the rule before it is executed. cwd-safe rules
+                     may be executed concurrently with any other rules, and the current working directory is not set.
       ex_safe     -- Whether or not the rule is exception safe (True or False). Specified when the rule was created. If an exception occurs while
                      a non-exception-safe rule is executing, emk will print a warning indicating that a rule was partially executed, and should be cleaned.
       has_changed -- The function to execute to determine if a requirement or product has changed. Uses emk.default_has_changed by default.
@@ -87,12 +88,12 @@ class _Rule(object):
                         All secondary dependencies of a rule are built before the rule is built. If a secondary dependency does not
                         exist, a build error is raised.
     """
-    def __init__(self, requires, args, func, threadsafe, ex_safe, has_changed, scope):
+    def __init__(self, requires, args, func, cwd_safe, ex_safe, has_changed, scope):
         self.func = func
         self.produces = []
         self.requires = requires
         self.args = args
-        self.threadsafe = threadsafe
+        self.cwd_safe = cwd_safe
         self.ex_safe = ex_safe
         self.has_changed = has_changed
         
@@ -152,9 +153,9 @@ class _RuleQueue(object):
     The special thread is the only thread that is allowed to handle "special" queue items;
     it may also handle normal queue items. The normal threads only handle normal queue items.
     
-    Basically this is for handling non-threadsafe rules. Threadsafe rules are "normal" and may be
-    handled by any thread; non-threadsafe rules are "special" and are only handled by the single
-    special thread, so there is only ever one thread controlling the current working directory.
+    Basically this is for handling cwd-unsafe rules. cwd-safe rules are "normal" and may be handled by any thread; 
+    cwd-unsafe rules are "special" and are only handled by the single special thread, so
+    there is only ever one thread controlling the current working directory.
     
     It works as a normal threadsafe queue, but with a separate queue for the special items.
     The special thread checks to see if there are any items on the special queue; if not, it tries to
@@ -191,8 +192,8 @@ class _RuleQueue(object):
             if self.errors:
                 return
             self.tasks += 1
-            if not rule.threadsafe or (not len(self.special_queue) and not self.special_thread_busy) or self.num_threads == 1:
-                # not threadsafe, or special queue is empty, so add to special queue
+            if not rule.cwd_safe or (not len(self.special_queue) and not self.special_thread_busy) or self.num_threads == 1:
+                # not cwd_safe, or special queue is empty, so add to special queue
                 self.special_queue.append(rule)
                 self.special_cond.notify()
             else:
@@ -300,7 +301,7 @@ class _Clean_Module(object):
         emk.mark_virtual(*produces)
     
     def post_rules(self):
-        emk.rule(self.clean_func, ["clean"], [emk.ALWAYS_BUILD], threadsafe=True, ex_safe=True)
+        emk.rule(self.clean_func, ["clean"], [emk.ALWAYS_BUILD], cwd_safe=True, ex_safe=True)
 
 class _Module_Instance(object):
     def __init__(self, name, instance, mod):
@@ -1090,7 +1091,7 @@ class EMK_Base(object):
                 if need_build:
                     produces = [p.abs_path for p in rule.produces]
                     
-                    if not rule.threadsafe:
+                    if not rule.cwd_safe:
                         os.chdir(rule.scope.dir)
                     rule.func(produces, rule.requires, *rule.args)
                     rule._ran_func = True
@@ -1489,7 +1490,7 @@ class EMK_Base(object):
         self.log.info("Module %s not found", name)
         return None
     
-    def _rule(self, func, produces, requires, args, threadsafe, ex_safe, has_changed, stack):
+    def _rule(self, func, produces, requires, args, cwd_safe, ex_safe, has_changed, stack):
         if self.scope_name != "rules":
             raise _BuildError("Cannot create rules when not in 'rules' scope (current scope = '%s')" % (self.scope_name), stack)
         
@@ -1504,7 +1505,7 @@ class EMK_Base(object):
         if not has_changed:
             has_changed = self.default_has_changed
 
-        new_rule = _Rule(fixed_requires, args, func, threadsafe, ex_safe, has_changed, self.scope)
+        new_rule = _Rule(fixed_requires, args, func, cwd_safe, ex_safe, has_changed, self.scope)
         new_rule.stack = stack
         with self._lock:
             self._rules.append(new_rule)
@@ -1988,10 +1989,10 @@ class EMK(EMK_Base):
         ensure that all the requirements in the requires list (the primary dependencies) have been built or otherwise exist
         before the rule function is executed.
         
-        Rules may be declared as either threadsafe or non-threadsafe (using the threadsafe keyword argument).
-        Threadsafe rules may be executed in parallel and must not depend on the current working directory.
-        Non-threadsafe rules are all executed by a single thread; the current working directory will be set to
-        the scope dir that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
+        Rules may be declared as either cwd-safe or cwd-unsafe (using the cwd_safe keyword argument).
+        cwd-safe rules may be executed in parallel and must not depend on the current working directory.
+        cwd-unsafe rules are all executed by a single thread; the current working directory will be set to
+        the scope directory that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
         
         It is a build error to declare more than one rule that produces the same target.
         
@@ -2009,7 +2010,8 @@ class EMK(EMK_Base):
           kwargs   -- Keyword arguments - see below.
         
         Keyword arguments:
-          threadsafe  -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+          cwd_safe    -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working directory).
+                         The default value is False.
           ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
                          The warning indicates that the rule was partially executed and may have left partial build products, so
                          the build should be cleaned. The default value is False.
@@ -2017,10 +2019,10 @@ class EMK(EMK_Base):
                          have changed. The default value is emk.default_has_changed.
         """
         stack = _format_stack(_filter_stack(traceback.extract_stack()[:-1]))
-        threadsafe = kwargs.get("threadsafe", False)
+        cwd_safe = kwargs.get("cwd_safe", False)
         ex_safe = kwargs.get("ex_safe", False)
         has_changed = kwargs.get("has_changed", None)
-        self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed, stack)
+        self._rule(func, produces, requires, args, cwd_safe, ex_safe, has_changed, stack)
     
     def make_rule(self, produces, requires, *args, **kwargs):
         """
@@ -2044,9 +2046,7 @@ class EMK(EMK_Base):
           kwargs   -- Keyword arguments - see below.
         
         Keyword arguments:
-          threadsafe  -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
-                         Threadsafe rules may be executed in parallel. If False, the current working directory will be set to the
-                         scope directory before the rule is executed. Non-threadsafe rules are all executed by a single thread.
+          cwd_safe    -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working directory).
                          The default value is False.
           ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
                          The warning indicates that the rule was partially executed and may have left partial build products, so
@@ -2056,10 +2056,10 @@ class EMK(EMK_Base):
         """
         def decorate(func):
             stack = _format_decorator_stack(_filter_stack(traceback.extract_stack()[:-1]))
-            threadsafe = kwargs.get("threadsafe", False)
+            cwd_safe = kwargs.get("cwd_safe", False)
             ex_safe = kwargs.get("ex_safe", False)
             has_changed = kwargs.get("has_changed", None)
-            self._rule(func, produces, requires, args, threadsafe, ex_safe, has_changed, stack)
+            self._rule(func, produces, requires, args, cwd_safe, ex_safe, has_changed, stack)
             return func
         return decorate
     
@@ -2428,7 +2428,7 @@ class EMK(EMK_Base):
         Convert a path into an absolute path based on the current scope.
         
         When a rule is executing, the current working directory of the process will not necessarily be the
-        directory that the rule was defined in (if the rule was declared to be threadsafe). However, the directory
+        directory that the rule was defined in (if the rule was declared to be cwd_safe). However, the directory
         that the rule was defined in is always available via emk.scope_dir. The abspath() method uses the scope dir
         to convert the given path into an absolute path, if it was not already absolute.
         

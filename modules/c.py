@@ -330,7 +330,7 @@ class Module(object):
         if extra_deps is None:
             requires.append(emk.ALWAYS_BUILD)
         
-        emk.rule(self.do_compile, [dest], requires, *args, threadsafe=True, ex_safe=True)
+        emk.rule(self.do_compile, [dest], requires, *args, cwd_safe=True, ex_safe=True)
         if extra_deps:
             emk.weak_depend(dest, extra_deps)
     

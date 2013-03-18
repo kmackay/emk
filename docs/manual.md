@@ -261,9 +261,9 @@ produced (they must be either present in the filesystem, or declared virtual usi
 the list of productions and requirements may contain both relative and absolute paths; emk will convert everything to absolute paths before
 passing them to the rule function.
 
-Rules may be declared as either threadsafe or non-threadsafe (using the threadsafe keyword argument).
-Threadsafe rules may be executed in parallel and must not depend on the current working directory.
-Non-threadsafe rules are all executed by a single thread; the current working directory will be set to
+Rules may be declared as either cwd-safe or cwd-unsafe (using the cwd_safe keyword argument).
+cwd-safe rules may be executed in parallel and must not depend on the current working directory.
+cwd-unsafe rules are all executed by a single thread; the current working directory will be set to
 the scope directory that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
 
 It is a build error to declare more than one rule that produces the same target.
@@ -287,7 +287,8 @@ Arguments:
  * kwargs -- Keyword arguments - see below.
 
 Keyword arguments:
- * threadsafe -- If True, the rule is considered to be threadsafe (ie, does not depend on the current working directory).
+ * cwd_safe -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working directory).
+               The default value is False.
  * ex_safe -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
                  The warning indicates that the rule was partially executed and may have left partial build products, so
                  the build should be cleaned. The default value is False.

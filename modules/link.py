@@ -18,11 +18,11 @@ class _GccLinker(object):
     In order for the emk link module to use a linker instance, the linker class must define the following methods:
       contains_main_function
       create_static_lib
-      static_lib_threadsafe
+      static_lib_cwd_safe
       shlib_opts
       exe_opts
       do_link
-      link_threadsafe
+      link_cwd_safe
       strip
     See the documentation for those functions in this class for more details.
     
@@ -145,9 +145,9 @@ class _GccLinker(object):
         cur_objs = objs[start:]
         self.add_to_static_lib(dest, cur_objs)
     
-    def static_lib_threadsafe(self):
+    def static_lib_cwd_safe(self):
         """
-        Returns True if creating a static library using the create_static_lib() method is threadsafe (ie, does not
+        Returns True if creating a static library using the create_static_lib() method is cwd_safe (ie, does not
         use anything that depends on the current working directory); returns False otherwise.
         """
         return True
@@ -202,9 +202,9 @@ class _GccLinker(object):
         
         self.link_cmd(linker, flat_flags, dest, source_objs, abs_libs, lib_dir_flags, rel_lib_flags)
     
-    def link_threadsafe(self):
+    def link_cwd_safe(self):
         """
-        Returns True if linking a shared library or executable using the do_link() method is threadsafe (ie, does not
+        Returns True if linking a shared library or executable using the do_link() method is cwd_safe (ie, does not
         use anything that depends on the current working directory); returns False otherwise.
         """
         return True
@@ -656,7 +656,7 @@ class Module(object):
                         libname = self.static_libname
                 libpath = os.path.join(emk.build_dir, libname)
                 self._static_libpath = libpath
-                emk.rule(self._create_static_lib, libpath, lib_objs, False, threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True)
+                emk.rule(self._create_static_lib, libpath, lib_objs, False, cwd_safe=self.linker.static_lib_cwd_safe(), ex_safe=True)
                 emk.alias(libpath, "link.__static_lib__")
                 emk.autobuild(libpath)
             if self.make_shared_lib:
@@ -664,7 +664,7 @@ class Module(object):
                 if self.shared_libname:
                     libname = self.shared_libname
                 libpath = os.path.join(emk.build_dir, libname)
-                emk.rule(self._create_shared_lib, libpath, ["link.__exe_deps__"] + list(lib_objs), threadsafe=self.linker.link_threadsafe(), ex_safe=True)
+                emk.rule(self._create_shared_lib, libpath, ["link.__exe_deps__"] + list(lib_objs), cwd_safe=self.linker.link_cwd_safe(), ex_safe=True)
                 emk.autobuild(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
         if not making_static_lib:
@@ -680,7 +680,7 @@ class Module(object):
                 libname = self.static_libname
             libpath = os.path.join(emk.build_dir, libname)
             emk.rule(self._create_static_lib, libpath, ["link.__static_lib__", "link.__exe_deps__"], True, \
-                threadsafe=self.linker.static_lib_threadsafe(), ex_safe=True)
+                cwd_safe=self.linker.static_lib_cwd_safe(), ex_safe=True)
             emk.alias(libpath, "link.__lib_in_lib__")
             emk.autobuild(libpath)
         
@@ -702,7 +702,7 @@ class Module(object):
             name = name + self.exe_ext
             
             path = os.path.join(emk.build_dir, name)
-            emk.rule(self._create_exe, path, [obj, "link.__exe_deps__"], threadsafe=self.linker.link_threadsafe(), ex_safe=True)
+            emk.rule(self._create_exe, path, [obj, "link.__exe_deps__"], cwd_safe=self.linker.link_cwd_safe(), ex_safe=True)
             emk.alias(path, name)
             exe_targets.append(path)
             
