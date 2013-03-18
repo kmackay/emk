@@ -386,9 +386,10 @@ files have changed and why emk is executing rules.
 
 If you want to debug a specific target (to see why it is/isn't being built), you can trace it by using `emk trace=<target path(s)>`.
 You can pass in multiple targets to trace separated by ','. You can also programmatically add traces in any emk config file
-(eg `emk_rules.py`) using the `emk.trace(*paths)` function. Once the build is complete, emk will print out a trace for each traced target.
+(eg `emk_rules.py`) using the `emk.trace(*paths)` function. Once the build is complete (or fails), emk will print out a trace for each traced target.
 The trace includes which rules depend on that target, and the dependency tree for the target. Changed dependencies will be output in red
-(depending on the log style).
+(depending on the log style). If a build rule did not execute due to a build error, it is not known whether or not that rule's dependencies
+have changed or not; those dependencies will be shown in blue (depending on the log style).
 
 By default, the dependency tree trace will not follow unchanged files. If you want to force the tracer to trace unchanged files, pass the
 trace_unchanged=yes option to emk. Example: `emk trace=myprogram trace_unchanged=yes`.
