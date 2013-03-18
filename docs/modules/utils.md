@@ -3,6 +3,19 @@ Utils Module
 
 This module provides various utility methods. It does not have any configurable properties.
 
+Classes
+-------
+
+#### `utils.cd` Context Manager
+This is a simple context manager for changing to a directory, and always returning to the original directory.
+
+Usage:
+```python
+with utils.cd("some/path"):
+    # do stuff; in here the working directory will be set to some/path
+# the working directory will always be returned to its original state.
+```
+
 Methods
 -------
 
@@ -40,16 +53,6 @@ Delete a file or directory tree. It is not an error if the file or directory doe
 Arguments:
  * **path**: The file or directory tree to delete.
  * **print_msg**: If True, a log message is printed about the removal. The default value is False.
-
-#### `utils.cd` Context Manager
-This is a simple context manager for changing to a directory, and always returning to the original directory.
-
-Usage:
-```python
-with utils.cd("some/path"):
-    # do stuff; in here the working directory will be set to some/path
-# the working directory will always be returned to its original state.
-```
 
 #### `utils.call(*args, **kwargs)`
 Call a subprocess. Returns a tuple (stdout, stderr, exit code).
