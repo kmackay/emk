@@ -70,4 +70,4 @@ avoid some performance issues with HFS+ when directories contain large numbers o
 You can reproduce these results using the scripts in the `speed-test` directory. First, change to the `speed-test` directory.
 Then, run `./generate.py` to generate the test files. Once that is complete, run `./run.py` to run the speed test. This will take
 a long time. Once the speed test is completed, the results will be in `results.txt`. Each line of the results is
-`<number of files compiled> <build time in seconds>`.
+`<number of files compiled> <build time in seconds>`. You can then run `./cleanup.py` to remove the generated test files.
