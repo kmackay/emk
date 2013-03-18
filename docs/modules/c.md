@@ -21,46 +21,38 @@ is responsible for marking the object files as autobuild if desired.
 
 Properties
 ----------
-```
-  compiler     -- The compiler instance that is used to load dependencies and compile C/C++ code.
-  include_dirs -- A list of additional include directories for both C and C++ code.
-  defines      -- A dict of <name>: <value> defines for both C and C++; each entry is equivalent to
-                  #define <name> <value>.
-  flags        -- A list of flags for both C and C++. If you have a 'flag' that is more than one argument,
-                  pass it as a tuple. Example: ("-isystem", "/path/to/extra/sys/includes"). Duplicate flags
-                  will be removed.
-  source_files -- A list of files that should be included for compilation. Files will be built as C or C++
-                  depending on the file extension.
+ * **compiler**: The compiler instance that is used to load dependencies and compile C/C++ code.
+ * **include_dirs**: A list of additional include directories for both C and C++ code.
+ * **defines**: A dict of <name>: <value> defines for both C and C++; each entry is equivalent to #define <name> <value>.
+ * **flags**: A list of flags for both C and C++. If you have a 'flag' that is more than one argument,
+              pass it as a tuple. Example: ("-isystem", "/path/to/extra/sys/includes"). Duplicate flags will be removed.
+ * **source_files**: A list of files that should be included for compilation. Files will be built as C or C++ depending on the file extension.
   
-  c.exts         -- The list of file extensions (suffixes) that will be considered as C code. The default is [".c"].
-  c.include_dirs -- A list of additional include directories for C code.
-  c.defines      -- A dict of <name>: <value> defines for C.
-  c.flags        -- A list of flags for C.
-  c.source_files -- A list of C files that should be included for compilation (will be built as C code).
+ * **c.exts**: The list of file extensions (suffixes) that will be considered as C code. The default is [".c"].
+ * **c.include_dirs**: A list of additional include directories for C code.
+ * **c.defines**: A dict of <name>: <value> defines for C.
+ * **c.flags**: A list of flags for C.
+ * **c.source_files**: A list of C files that should be included for compilation (will be built as C code).
   
-  cxx.exts         -- The list of file extensions (suffixes) that will be considered as C++ code.
-                      The default is [".cpp", ".cxx", ".c++", ".cc"].
-  cxx.include_dirs -- A list of additional include directories for C++ code.
-  cxx.defines      -- A dict of <name>: <value> defines for C++.
-  cxx.flags        -- A list of flags for C++.
-  cxx.source_files -- A list of C++ files that should be included for compilation (will be built as C++ code).
+ * **cxx.exts**: The list of file extensions (suffixes) that will be considered as C++ code. The default is [".cpp", ".cxx", ".c++", ".cc"].
+ * **cxx.include_dirs**: A list of additional include directories for C++ code.
+ * **cxx.defines**: A dict of <name>: <value> defines for C++.
+ * **cxx.flags**: A list of flags for C++.
+ * **cxx.source_files**: A list of C++ files that should be included for compilation (will be built as C++ code).
   
-  autodetect  -- Whether or not to autodetect files to build from the scope directory. All files that match the
-                 c.exts suffixes will be compiled as C, and all files that match the cxx.exts suffixes will be
-                 compiled as C++. Autodetection does not take place until the prebuild stage, so that autodetection
-                 of generated code can gather as many targets as possible (see autodetect_from_targets).
-                 The default value is True.
-  autodetect_from_targets -- Whether or not to autodetect generated code based on rules defined in the current scope.
+ * **autodetect**: Whether or not to autodetect files to build from the scope directory. All files that match the
+                   c.exts suffixes will be compiled as C, and all files that match the cxx.exts suffixes will be
+                   compiled as C++. Autodetection does not take place until the prebuild stage, so that autodetection
+                   of generated code can gather as many targets as possible (see autodetect_from_targets).
+                   The default value is True.
+ * **autodetect_from_targets**: Whether or not to autodetect generated code based on rules defined in the current scope.
                              The default value is True.
-  excludes     -- A list of source files to exclude from compilation.
-  non_lib_src  -- A list of source files that will not be linked into a library for this directory
-                  (passed to the link module).
-  non_exe_src  -- A list of source files that will not be linked into an executable, even if they contain
-                  a main() function.
-  unique_names -- If True, the output object files will be named according to the path from the project directory,
-                  to avoid naming conflicts when the build directory is not a relative path. The default value
-                  is False. If True, the link module's unique_names property will also be set to True.
-```
+ * **excludes**: A list of source files to exclude from compilation.
+ * **non_lib_src**: A list of source files that will not be linked into a library for this directory (passed to the link module).
+ * **non_exe_src**: A list of source files that will not be linked into an executable, even if they contain a main() function.
+ * **unique_names**: If True, the output object files will be named according to the path from the project directory,
+                     to avoid naming conflicts when the build directory is not a relative path. The default value
+                     is False. If True, the link module's unique_names property will also be set to True.
 
 Compiler Support
 ----------------
@@ -68,34 +60,31 @@ Compiler Support
 To add support for a new compiler, you must implement a compiler class for use by the c module (and then set the c module's `compiler` property
 to an instance of the compiler class). A compiler class must provide the following methods:
 
-`compiler.load_extra_dependencies(path)`
+### `compiler.load_extra_dependencies(path)`
 This function should load any extra dependencies for the given object file path (ie, header files). The extra dependencies could be loaded from a generated
 dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
 
-`compiler.compile_c(source, dest, includes, defines, flags)`
+Arguments:
+ * **path**: The path of the object file to get dependencies for.
+
+### `compiler.compile_c(source, dest, includes, defines, flags)`
 This function will be called to compile a C file into an object file. This function is not required if no C files will be compiled.
 
 Arguments:
-```
-source   -- The C source file path to compile.
-dest     -- The output object file path.
-includes -- A list of extra include directories.
-defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to
-            #define <name> <value>.
-flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use
-            the emk utils module: 'flattened = utils.flatten(flags)'.
-```
+ * **source**: The C source file path to compile.
+ * **dest**: The output object file path.
+ * **includes**: A list of extra include directories.
+ * **defines**: A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+ * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
+              the emk utils module: 'flattened = utils.flatten(flags)'.
 
-`compiler.compile_cxx(source, dest, includes, defines, flags)`
+### `compiler.compile_cxx(source, dest, includes, defines, flags)`
 This function will be called to compile a C++ file into an object file. This function is not required if no C++ files will be compiled.
 
 Arguments:
-```
-source   -- The C++ source file path to compile.
-dest     -- The output object file path.
-includes -- A list of extra include directories.
-defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to
-            #define <name> <value>.
-flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use
-            the emk utils module: 'flattened = utils.flatten(flags)'.
-```
+ * **source**: The C++ source file path to compile.
+ * **dest**: The output object file path.
+ * **includes**: A list of extra include directories.
+ * **defines**: A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+ * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
+              the emk utils module: 'flattened = utils.flatten(flags)'.
