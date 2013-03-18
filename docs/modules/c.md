@@ -19,8 +19,19 @@ from rules defined before the prebuild stage (ie, in the post_rules() method of 
 Note that the compilation rules are not built automatically; the link module (or other modules/user code)
 is responsible for marking the object files as autobuild if desired.
 
+Classes
+-------
+
+**GccCompiler**: A compiler class that uses gcc/g++ to compile.
+
+Properties (defaults set based on the path prefix passed to the constructor):
+ * **c_path**: The path of the C compiler (eg "gcc").
+ * **cxx_path**: The path of the C++ compiler (eg "g++").
+
 Properties
 ----------
+All properties are inherited from the parent scope if there is one.
+
  * **compiler**: The compiler instance that is used to load dependencies and compile C/C++ code.
  * **include_dirs**: A list of additional include directories for both C and C++ code.
  * **defines**: A dict of <name>: <value> defines for both C and C++; each entry is equivalent to #define <name> <value>.
