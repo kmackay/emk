@@ -1535,6 +1535,18 @@ class EMK_Base(object):
             lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
             self.log.error('\n'.join(lines), extra={'adorn':False})
     
+    def _trace_changed_str(self, s):
+        if self._options["style"] == "no":
+            return '*' + s + '*'
+        else:
+            return _style_tag('red') + s + _style_tag('')
+    
+    def _trace_unknown_str(self, s):
+        if self._options["style"] == "no":
+            return '(' + s + ')'
+        else:
+            return _style_tag('blue') + s + _style_tag('')
+    
     def _trace_helper(self, rule, visited, to_visit):
         if not rule:
             return
@@ -1544,39 +1556,25 @@ class EMK_Base(object):
             for target, changed in rule._req_trace.items():
                 path = target.abs_path
                 if changed:
-                    if self._options["style"] == "no":
-                        strings.append('*' + path + '*')
-                    else:
-                        strings.append(_style_tag('red') + path + _style_tag(''))
+                    strings.append(self._trace_changed_str(path))
                     if target not in visited:
                         to_visit.append(target)
                 elif changed is not None:
                     strings.append(path)
                     if self._trace_unchanged and target not in visited:
                         to_visit.append(target)
-                else:
-                    strings.append('<' + path + '>')
         else:
             for req, weak in rule._required_targets:
                 path = req.abs_path
                 if path is self.ALWAYS_BUILD:
-                    if self._options["style"] == "no":
-                        strings.append('*' + path + '*')
-                    else:
-                        strings.append(_style_tag('red') + path + _style_tag(''))
+                    strings.append(self._trace_changed_str(path))
                 else:
-                    if self._options["style"] == "no":
-                        strings.append('(' + path + ')')
-                    else:
-                        strings.append(_style_tag('blue') + path + _style_tag(''))
+                    strings.append(self._trace_unknown_str(path))
                     if req not in visited:
                         to_visit.append(req)
         
         if rule._ran_func:
-            if self._options["style"] == "no":
-                s = ", ".join(['*' + p.abs_path + '*' for p in rule.produces])
-            else:
-                s = ", ".join([_style_tag('red') + p.abs_path + _style_tag('') for p in rule.produces])
+            s = ", ".join([self._trace_changed_str(p.abs_path) for p in rule.produces])
         else:
             s = ", ".join([p.abs_path for p in rule.produces])
         if strings:
