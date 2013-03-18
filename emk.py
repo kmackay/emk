@@ -1587,15 +1587,18 @@ class EMK_Base(object):
         self.log.info("")
         self.log.info(_style_tag('u') + "Trace for %s" % (target.abs_path) + _style_tag(''))
         
-        self.log.info("Rules that require %s:" % (target.abs_path))
-        for r in target._required_by:
-            strings = [t.abs_path for t, weak in r._required_targets]
-            s = ", ".join([p.abs_path for p in r.produces])
-            if strings:
-                s = s + " <= " + ", ".join(strings)
-            else:
-                s = s + " <= (none)"
-            self.log.info("  " + s)
+        if target._required_by:
+            self.log.info("Rules that require %s:" % (target.abs_path))
+            for r in target._required_by:
+                strings = [t.abs_path for t, weak in r._required_targets]
+                s = ", ".join([p.abs_path for p in r.produces])
+                if strings:
+                    s = s + " <= " + ", ".join(strings)
+                else:
+                    s = s + " <= (none)"
+                self.log.info("  " + s)
+        else:
+            self.log.info("There are no rules that require %s" % (target.abs_path))
         
         self.log.info(_style_tag('bold') + "Dependency trace for %s:" % (target.abs_path) + _style_tag(''))
         if self._options["style"] == "no":
