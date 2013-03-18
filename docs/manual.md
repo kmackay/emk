@@ -131,10 +131,10 @@ or config files; you can just use emk.<whatever> directly.
 
 ### Global modifiable properties:
 ```
-  default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced,
-                           the replacement function should take a single argument which is the absolute path of the
-                           thing to check to see if it has changed. When this function is executing, emk.current_rule
-                           and emk.rule_cache() are available.
+  default_has_changed   -- The default function to determine if a rule requirement or product has changed.
+                           If replaced, the replacement function should take a single argument which is the absolute
+                           path of the thing to check to see if it has changed. When this function is executing,
+                           emk.current_rule and emk.rule_cache() are available.
   build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions.
                            The default value is "$:build:$".
   proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions.
@@ -313,8 +313,8 @@ Arguments:
 
 Keyword arguments:
 ```
-  cwd_safe    -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working directory).
-                 The default value is False.
+  cwd_safe    -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working
+                 directory). The default value is False.
   ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted
                  in any way. The warning indicates that the rule was partially executed and may have left partial
                  build products, so the build should be cleaned. The default value is False.
