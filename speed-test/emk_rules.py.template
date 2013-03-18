@@ -1,0 +1,4 @@
+c, link = emk.module("c", "link")
+link.detect_exe = False
+link.make_static_lib = False
+link.make_shared_lib = False
