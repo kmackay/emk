@@ -60,14 +60,14 @@ Compiler Support
 To add support for a new compiler, you must implement a compiler class for use by the c module (and then set the c module's `compiler` property
 to an instance of the compiler class). A compiler class must provide the following methods:
 
-### `compiler.load_extra_dependencies(path)`
+#### `load_extra_dependencies(self, path)`
 This function should load any extra dependencies for the given object file path (ie, header files). The extra dependencies could be loaded from a generated
 dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
 
 Arguments:
  * **path**: The path of the object file to get dependencies for.
 
-### `compiler.compile_c(source, dest, includes, defines, flags)`
+#### `compile_c(self, source, dest, includes, defines, flags)`
 This function will be called to compile a C file into an object file. This function is not required if no C files will be compiled.
 
 Arguments:
@@ -78,7 +78,7 @@ Arguments:
  * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
               the emk utils module: 'flattened = utils.flatten(flags)'.
 
-### `compiler.compile_cxx(source, dest, includes, defines, flags)`
+#### `compile_cxx(self, source, dest, includes, defines, flags)`
 This function will be called to compile a C++ file into an object file. This function is not required if no C++ files will be compiled.
 
 Arguments:
