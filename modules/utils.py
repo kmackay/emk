@@ -82,7 +82,7 @@ class Module(object):
 
     def rm(self, path, print_msg=False):
         """
-        Remove a file or directory tree.
+        Delete a file or directory tree.
         
         It is not an error if the file or directory does not exist.
         
