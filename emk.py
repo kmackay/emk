@@ -1561,7 +1561,7 @@ class EMK_Base(object):
                         to_visit.append(target)
                 elif changed is not None:
                     strings.append(path)
-                    if self._trace_unchanged and target not in visited:
+                    if self._trace_unchanged and target.rule not in visited:
                         to_visit.append(target)
         else:
             for req, weak in rule._required_targets:
@@ -1570,7 +1570,7 @@ class EMK_Base(object):
                     strings.append(self._trace_changed_str(path))
                 else:
                     strings.append(self._trace_unknown_str(path))
-                    if req not in visited:
+                    if req.rule not in visited:
                         to_visit.append(req)
         
         if rule._ran_func:
@@ -1610,8 +1610,8 @@ class EMK_Base(object):
         to_visit.append(target)
         while to_visit:
             next = to_visit.popleft()
-            if next not in visited:
-                visited.add(next)
+            if next.rule not in visited:
+                visited.add(next.rule)
                 self._trace_helper(next.rule, visited, to_visit)
     
     def _print_traces(self):
