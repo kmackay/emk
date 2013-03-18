@@ -47,8 +47,8 @@ This is a simple context manager for changing to a directory, and always returni
 Usage:
 ```python
 with utils.cd("some/path"):
-      # do stuff; in here the working directory will be set to some/path
-  # the working directory will always be returned to its original state.
+    # do stuff; in here the working directory will be set to some/path
+# the working directory will always be returned to its original state.
 ```
 
 #### `utils.call(*args, **kwargs)`
