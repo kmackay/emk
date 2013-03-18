@@ -34,7 +34,7 @@ class _GccLinker(object):
       nm_path    -- The path of the nm tool to read the symbol table from an object file (eg "nm").
       
       main_nm_regex -- The compiled regex to use to search for a main() function in the nm output. The default value
-                       looks for a line ending in " T _main". For mingw64 building for 64-bit, you probably want something
+                       looks for a line ending in " T main". For mingw64 building for 64-bit, you probably want something
                        like 're.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)'. For mingw64 building for 32-bit, you
                        want something like 're.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)'.
     """
@@ -102,7 +102,7 @@ class _GccLinker(object):
         Create a static library (archive) containing the given object files and all object files contained in
         the given other libs (which will be static libraries as well).
         
-        Called by the link module to create a static library. If the link modules 'lib_in_lib' property is True,
+        Called by the link module to create a static library. If the link module's 'lib_in_lib' property is True,
         the link module will pass in the library dependencies of this library in the 'other_libs' argument. This
         method must include the contents of all the other libraries in the generated static library.
         
@@ -297,7 +297,7 @@ class Module(object):
     By default, the link module will autodetect object files that contain a main() function; those object files will
     each be linked into an executable. The other files (that do not contain main()) are linked into a static library,
     which is used when linking the executables. You may specify dependencies on other directories managed by emk
-    (in the same project or a different proeject); the static libraries from those directories will be linked in as well.
+    (in the same project or a different project); the static libraries from those directories will be linked in as well.
     
     You can also build a shared library instead of or in addition to the static library. Note that on many platforms,
     the object files linked into a shared library must be compiled as position independent code (eg '-fPIC' or '-fpic' with gcc).
