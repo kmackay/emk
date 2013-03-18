@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import os
 import subprocess
 import re
@@ -25,6 +27,7 @@ for num in tests:
         with open("results.txt", "a+") as f:
             f.write("%d %s\n" % (num * 1000, match.group(1)))
     else:
-        print "Error running test for %d" % (num * 1000)
+        print("Error running test for %d" % (num * 1000))
         break
+    print("Finished %d file compile test")
     
