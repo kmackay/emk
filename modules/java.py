@@ -22,7 +22,7 @@ class Module(object):
     
     This module will autodetect .java files in the current directory, compile them (with javac) and create
     a jar file out of the compiled classes. It will also autodetect classes that contain a main() method;
-    for each class with a main() method, the java module will create an executable jar (name <class name>.jar)
+    for each class with a main() method, the java module will create an executable jar (named <class name>.jar)
     that can be run using "java -jar <class name>.jar".
     
     Note that autodetection of main() methods will only work if the main() method is in the toplevel class in the
