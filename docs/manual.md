@@ -22,15 +22,17 @@ Recognized options:
   threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
              If the value is a number, emk will use that many threads for building; if the value is "x",
              emk will use as many threads as there are cores on the build machine. The default value is "x".
-  style   -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no", log output styling
-             is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
-             on Windows). If set to "html", the log output will be marked up with &lt;div> and &lt;span> tags that can then
-             be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
-             itself as a subprocess). The default value is "console".
-  trace   -- Specify a set of targets to trace for debugging purposes. The trace for each target will be printed once the build is complete.
-             The targets are specified as a list of comma-separated paths, which may be relative to the current directory or absolute.
-             Build and project directory placeholders will be replaced based on the current directory.
-  trace_unchanged -- If set to "yes", the tracer will trace through targets that were not modified as well. The default value is "no".
+  style   -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no",
+             log output styling is disabled. If set to "console", ANSI escape codes will be used to color log
+             output (not yet supported on Windows). If set to "html", the log output will be marked up with &lt;div>
+             and &lt;span> tags that can then be styled using CSS. If set to "passthrough", the style metadata will
+             be output directly (useful if emk is calling itself as a subprocess). The default value is "console".
+  trace   -- Specify a set of targets to trace for debugging purposes. The trace for each target will be printed
+             once the build is complete. The targets are specified as a list of comma-separated paths, which may be
+             relative to the current directory or absolute. Build and project directory placeholders will be
+             replaced based on the current directory.
+  trace_unchanged -- If set to "yes", the tracer will trace through targets that were not modified as well.
+                     The default value is "no".
 ```
 
 Note that you can pass in other options that may be interpreted by the various config files.
@@ -121,18 +123,22 @@ or config files; you can just use emk.<whatever> directly.
   cleaning     -- True if "clean" has been passed as an explicit target; false otherwise.
   building     -- True when rules are being executed, false at other times.
   emk_dir      -- The directory which contains the emk module.
-  options      -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value). You can modify the contents of this dict.
+  options      -- A dict containing all command-line options passed to emk (ie, arguments of the form key=value).
+                  You can modify the contents of this dict.
   explicit_targets -- The set of explicit targets passed to emk (ie, all arguments that are not options).
   traces       -- The set of targets that will be traced once the build is complete (for debugging).
 ```
 
 ### Global modifiable properties:
 ```
-  default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced, the replacement
-                           function should take a single argument which is the absolute path of the thing to check to see if it has changed.
-                           When this function is executing, emk.current_rule and emk.rule_cache() are available.
-  build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions. The default value is "$:build:$".
-  proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions. The default value is "$:proj:$".
+  default_has_changed   -- The default function to determine if a rule requirement or product has changed. If replaced,
+                           the replacement function should take a single argument which is the absolute path of the
+                           thing to check to see if it has changed. When this function is executing, emk.current_rule
+                           and emk.rule_cache() are available.
+  build_dir_placeholder -- The placeholder to use for emk.build_dir in paths passed to emk functions.
+                           The default value is "$:build:$".
+  proj_dir_placeholder  -- The placeholder to use for emk.proj_dir in paths passed to emk functions.
+                           The default value is "$:proj:$".
 ```
 
 ### Scoped read-only properties (apply only to the current scope):
@@ -141,8 +147,9 @@ or config files; you can just use emk.<whatever> directly.
   proj_dir      -- The absolute path of the project directory for the current scope.
   scope_dir     -- The absolute path of the directory in which the scope was created
                    (eg, the directory from which the emk_<scope name>.py file was loaded).
-  local_targets -- The dict of potential targets (ie, rule products) defined in the current scope. This maps the original target path
-                   (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
+  local_targets -- The dict of potential targets (ie, rule products) defined in the current scope.
+                   This maps the original target path (ie, as passed into emk.rule() or @emk.make_rule) to
+                   the emk.Target instance.
   current_rule  -- The currently executing rule (an emk.Rule instance), or None if a rule is not being executed.
 ```
   
@@ -191,7 +198,9 @@ time or when the module isntance is created) since this will probably lead to an
 To load a module (or multiple modules) at any time (except when executing a rule), use `emk.module(names)`:
 
 Arguments:
-```  names -- The list of modules names (or a single name) to load into the current scope.```
+```
+  names -- The list of modules names (or a single name) to load into the current scope.
+```
 
 `emk.module(names)` returns the list of module instances corresponding to the given module names; None will be in the list for each module
 that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
@@ -287,15 +296,17 @@ If you have an existing rule function and you want to specify a build rule that 
 
 Arguments:
 ```
-  func     -- The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
+  func     -- The rule function to execute. Must take the correct number of arguments (produces, requires, and
+              the additional args).
   produces -- List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
-              Project and build dir placeholders will be resolved according to the current scope. Empty paths ("") are ignored.
-              This argument will be converted into a list of canonical paths, and passed as the first argument to the rule function.
+              Project and build dir placeholders will be resolved according to the current scope.
+              Empty paths ("") are ignored. This argument will be converted into a list of canonical paths, and
+              passed as the first argument to the rule function.
   requires -- List of paths that the rule requires to be built before it can be executed (ie, dependencies).
               The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
               be resolved according to each path. Empty paths ("") are ignored. May include the special
-              emk.ALWAYS_BUILD token to indicate that the rule should always be executed.
-              This argument will be converted into a list of canonical paths, and passed as the second argument to the rule function.
+              emk.ALWAYS_BUILD token to indicate that the rule should always be executed. This argument will be
+              converted into a list of canonical paths, and passed as the second argument to the rule function.
   args     -- Additional arguments that will be passed to the rule function.
   kwargs   -- Keyword arguments - see below.
 ```
@@ -304,11 +315,11 @@ Keyword arguments:
 ```
   cwd_safe    -- If True, the rule is considered to be cwd-safe (ie, does not depend on the current working directory).
                  The default value is False.
-  ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted in any way.
-                 The warning indicates that the rule was partially executed and may have left partial build products, so
-                 the build should be cleaned. The default value is False.
-  has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed" products)
-                 have changed. The default value is `emk.default_has_changed`.
+  ex_safe     -- If False, then emk will print a warning message if the execution of the rule is interrupted
+                 in any way. The warning indicates that the rule was partially executed and may have left partial
+                 build products, so the build should be cleaned. The default value is False.
+  has_changed -- The function to execute for this rule to determine if the dependencies (or "rebuild if changed"
+                 products) have changed. The default value is `emk.default_has_changed`.
 ```
 
 If you have a one-off build rule, you may want to use a decorator on the rule function instead, using
