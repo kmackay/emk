@@ -43,7 +43,7 @@ Documentation
 
 Run `emk -h` for basic usage information.
 
-**[Tutorial](docs/tutorial.md)**  
+**[Tutorial](tutorial/tutorial.md)**  
 **[Manual](docs/manual.md)**
 ### Modules
  * [Utility Module](docs/modules/utils.md)
