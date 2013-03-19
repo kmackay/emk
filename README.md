@@ -1,9 +1,9 @@
 emk
 ===
 
-Build system, written in Python. Requires Python 2.6 or higher; Python 3+ is supported.
+A Python-based build tool.
 
-Currently supports OS X and Linux. Windows support is planned.
+Requires Python 2.6 or higher; Python 3+ is supported. Currently supports OS X and Linux, with Windows support planned.
 
 Features
 --------
@@ -13,18 +13,18 @@ Features
  * Designed for correct recursive builds (ie, building in multiple directories that are dependent on
    each other). Note that emk only uses a single process for recursive builds; it does not spawn a new
    process for each directory. This allows a global view of the build graph so that correctness is easy.
- * Allows configuration of the build at the global, project, or directory level.
+ * Includes a module system for common build rules. Comes with modules for building C, C++, and Java.
  * Build rules are written in Python, so anything that Python can do can be done while building. It is
    easy to write new build rules.
  * Allows specification of build rules that produce multiple files (eg code generation), as well as rules
    that do not produce any files.
- * Includes a module system for common build rules. Comes with modules for building C, C++, and Java.
- * Fancy output formatting system - can output plain text, colored/styled console output (using ANSI escape codes),
-   or HTML (suitable for CSS styling).
- * Cache system for storing information between builds.
  * Allows new build rules to be added after building has started. This allows (for example) autodetection
    of executables based on the compiled object file (by parsing the nm output) rather than trying to parse
    source code.
+ * Hierarchical build configuration system, so you can configure build settings (such as compiler flags)
+   for a given project or directory easily.
+ * Fancy output formatting system - can output plain text, colored/styled console output (using ANSI escape codes),
+   or HTML (suitable for CSS styling).
 
 Installation
 ------------
