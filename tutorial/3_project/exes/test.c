@@ -5,6 +5,6 @@
 int main()
 {
     print_sum(1234, 5678);
-    printf("The defined value in test.c is %d\n", DEFINED_VALUE);
+    printf("In the emk tutorial, part 3. The defined value in test.c is %d\n", DEFINED_VALUE);
     return 0;
 }

@@ -104,8 +104,6 @@ class PrintFunction
 }
 ```
 
-```
-
 Now create a Java program `print.java` that will call do_print():
 ```java
 class print
@@ -248,7 +246,7 @@ indirectly depends on the `math` directory, we do not need to add that as a depe
 int main()
 {
     print_sum(1234, 5678);
-    printf("The defined value in test.c is %d\n", DEFINED_VALUE);
+    printf("In the emk tutorial, part 3. The defined value in test.c is %d\n", DEFINED_VALUE);
     return 0;
 }
 ```
@@ -267,7 +265,7 @@ This will build all the necessary files and create a `__build__/test` executable
 xxxx:exes kmackay$ __build__/test 
 1234 + 5678 = 6912
 The defined value in printing.c is 999
-The defined value in test.c is 10
+In the emk tutorial, part 3. The defined value in test.c is 10
 ```
 
 You can see that the DEFINED_VALUE was 10 in `test.c` (inherited from `emk_project.py`), but in `printing.c`, the value was 999 since we overrode the value in
@@ -376,7 +374,7 @@ We just have a simple C program `revision.c` that prints out the git information
 
 int main()
 {
-    printf("emk tutorial, section 4: Revision %s from %s\n", REVISION, URL);
+    printf("In the emk tutorial, part 4: Revision %s from %s\n", REVISION, URL);
     return 0;
 }
 ```
@@ -387,5 +385,5 @@ Run `emk` in the directory; remember that all build output will be placed in the
 `revision` executable:
 ```
 xxxx:4_rules kmackay$ __build__/revision 
-emk tutorial, section 4: Revision b2cf3e6 (master) from ssh://git@github.com/kmackay/emk.git
+In the emk tutorial, part 4: Revision b2cf3e6 (master) from ssh://git@github.com/kmackay/emk.git
 ```

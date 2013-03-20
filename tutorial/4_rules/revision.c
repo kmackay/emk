@@ -4,6 +4,6 @@
 
 int main()
 {
-    printf("emk tutorial, section 4: Revision %s from %s\n", REVISION, URL);
+    printf("In the emk tutorial, part 4: Revision %s from %s\n", REVISION, URL);
     return 0;
 }
