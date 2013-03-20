@@ -1855,7 +1855,7 @@ class EMK(EMK_Base):
             raise _BuildError("No rule creates these explicitly specified targets:", self._explicit_targets)
         
         for line in self._time_lines:
-            self.log.info(line)
+            self.log.debug(line)
         diff = time.time() - start_time
         self.log.info("Finished in %0.3f seconds" % (diff))
     
