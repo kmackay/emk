@@ -10,6 +10,8 @@ and a JDK if you want to run the Java examples.
 
 All of the tutorial code is available in the emk repository, in the `tutorial` directory.
 
+In any tutorial section, once the code is built, you should try modifying various files and rebuilding to see what emk does.
+
 1. Basics
 ---------
 
@@ -391,4 +393,147 @@ Run `emk` in the directory; remember that all build output will be placed in the
 ```
 xxxx:4_rules kmackay$ __build__/revision 
 In the emk tutorial, part 4: Revision b2cf3e6 (master) from ssh://git@github.com/kmackay/emk.git
+```
+
+5. Modules
+----------
+
+In the previous section, we created some functions to get information about the git repository, and created a rule to generate a header file
+based on that information. However, it would be nice to abstract all of that code out into an emk module; then it would be easily available
+for reuse in any `emk_rules.py` file. This section will explain how to make a module. First we create a new directory for this section:
+```
+xxxx:tutorial kmackay$ mkdir 5_modules
+xxxx:tutorial kmackay$ cd 5_modules
+```
+
+#### Creating the module
+
+First we create a subdirectory to put the module in (this is not required, but is a good way to organize things):
+```
+xxxx:tutorial kmackay$ mkdir modules
+xxxx:tutorial kmackay$ cd modules
+```
+
+Then we create the module file `revision.py`, which contains the following code:
+```python
+import os
+import logging
+
+utils = emk.module("utils")
+log = logging.getLogger("emk.revision")
+
+def get_git_revision(in_dir):
+    rev, err, code = utils.call("git", "rev-parse", "--short", "HEAD", print_call=False, cwd=in_dir)
+    return rev.strip()
+
+def get_git_branch(in_dir):
+    branch = ""
+    out, err, code = utils.call("git", "branch", print_call=False, print_stderr=False, cwd=in_dir)
+    lines = out.splitlines()
+    for line in lines:
+        if line.startswith("* "):
+            branch = line[2:]
+            break
+    return branch
+
+def get_git_url(in_dir):
+    out, err, code = utils.call("git", "remote", print_call=False, cwd=in_dir)
+    urls = []
+    
+    for repo in out.split():
+        info, err, code = utils.call("git", "remote", "show", "-n", repo, print_call=False, cwd=in_dir)
+        lines = info.splitlines()
+        for line in lines:
+            if line.startswith("  Fetch URL: "):
+                url = line[13:]
+                if url:
+                    urls.append(url)
+    return ', '.join(urls)
+
+def generate_revision_header(produces, requires):
+    cache = emk.rule_cache(produces[0])  
+    current_revision = "%s (%s)" % (get_git_revision(emk.scope_dir), get_git_branch(emk.scope_dir))
+    if "last_revision" in cache and cache["last_revision"] == current_revision and os.path.isfile(produces[0]):
+        log.info("Revision has not changed; not updating %s", produces[0])
+        return
+    cache["last_revision"] = current_revision
+
+    template = """
+#ifndef GENERATED_REVISION_H
+#define GENERATED_REVISION_H
+
+#define REVISION "%(revision)s"
+#define URL "%(url)s"
+
+#endif
+"""
+    log.info("Generating revision file %s", produces[0])
+    with open(produces[0], "w") as f:
+        f.write(template % {"revision": current_revision, "url": get_git_url(emk.scope_dir)})
+
+class Module(object):
+    def __init__(self, scope, parent=None):
+        if parent:
+            self.output_name = parent.output_name
+        else:
+            self.output_name = "revision.h"
+    
+    def new_scope(self, scope):
+        return Module(scope, parent=self)
+    
+    def post_rules(self):
+        utils.clean_rule(self.output_name)
+        if not emk.cleaning:
+            emk.rule(generate_revision_header, self.output_name, emk.ALWAYS_BUILD, cwd_safe=True)
+```
+
+First, the module file imports some required modules and sets up logging for the `revision` module (this is not required, but is nice to have).
+Then we have the same functions (from section 4 of the tutorial) to get the git information, as well as the rule function.
+
+Then, we have the actual module definition. This is just a class named Module, which has two requirements:
+ * The constructor must take at least one argument, which is the scope that the module is being created in.
+ * The module instance must provide a `new_scope()` method, which must take one argument which is the new scope that is being entered.
+
+In this example we set up the constructor and `new_scope()` method as you would do for inheriting configuration values. The only configuration
+value that can be inherited is the name of the file to output.
+
+Optionally the module instance may also have `load_global()`, `post_global()`, `load_project()`, `post_project()`, `load_subproj()`, `post_subproj()`,
+`load_rules()`, or `post_rules()` methods. The `load_<scope>()` method will be called called when the module is loaded into the named scope; the `post_<scope>()`
+method will be called after the scope file has been handled (eg, `post_rules()` will be called after the `emk_rules.py` file has been handled).
+In this example, we define a `post_rules()` method to set up the rule to generate the code (if emk is not cleaning) and to make the generated code be deleted
+when cleaning.
+
+#### The rules file
+
+The C code will be the same as for the previous section; we just need to update the `emk_rules.py` file to load the new module and use it.
+Here is the contents of `emk_rules.py` (back in the `5_modules` directory):
+```python
+emk.module_paths.append(emk.abspath("modules"))
+c, revision = emk.module("c", "revision")
+emk.depend("$:build:$/revision.o", "revision.h")
+```
+
+First we tell emk that it can also load modules from the `modules` directory. We then load the builtin `c` module and the `revision` module that we just created.
+Then we add the dependency on `revision.h` to the object file as before.
+
+Here is the `revision.c` file, which is the same as in section 4:
+```c
+#include "revision.h"
+
+#include <stdio.h>
+
+int main()
+{
+    printf("In the emk tutorial, part 5: Revision %s from %s\n", REVISION, URL);
+    return 0;
+}
+```
+
+#### Building
+
+Run `emk` in the `5_modules` directory; remember that all build output will be placed in the __build__ directory (which is created if needed). You can now run the
+`revision` executable:
+```
+xxxx:5_modules kmackay$ __build__/revision 
+In the emk tutorial, part 5: Revision 6dc0380 (master) from ssh://git@github.com/kmackay/emk.git
 ```
