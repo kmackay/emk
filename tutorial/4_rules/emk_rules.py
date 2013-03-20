@@ -30,12 +30,11 @@ def get_git_url(in_dir):
                     urls.append(url)
     return ', '.join(urls)
 
-@emk.make_rule("revision.h", emk.ALWAYS_BUILD)
+@emk.make_rule("revision.h", emk.ALWAYS_BUILD, cwd_safe=True)
 def generate_revision_header(produces, requires):
     cache = emk.rule_cache(produces[0])  
     current_revision = "%s (%s)" % (get_git_revision(emk.scope_dir), get_git_branch(emk.scope_dir))
     if "last_revision" in cache and cache["last_revision"] == current_revision and os.path.isfile(produces[0]):
-        emk.mark_untouched(produces[0])
         return
     cache["last_revision"] = current_revision
 
