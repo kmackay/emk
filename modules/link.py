@@ -626,9 +626,15 @@ class Module(object):
                     exe_objs.add(obj)
         elif self.detect_exe.lower() == "exact":
             for obj, src in self.objects.items():
+                if not os.path.exists(obj):
+                    raise emk.BuildError("%s did not exist when the link module tried to examine it. \
+Maybe it depends on something which there is no rule to make?" % (obj))
                 if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
             for obj in obj_nosrc:
+                if not os.path.exists(obj):
+                    raise emk.BuildError("%s did not exist when the link module tried to examine it. \
+Maybe it depends on something which there is no rule to make?" % (obj))
                 if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
         
