@@ -364,6 +364,11 @@ header file dependencies so that this manual process is not required.
 
 Finally we call `utils.clean_rule("revision.h")` so that `revision.h` will be deleted when `emk clean` is run.
 
+Note that ordinarily, emk would not build `revision.h` unless told to; however, since it is a dependency of something that is autobuilt
+(by the link module), it will be built automatically if no targets are explicitly specified. To declare that something should be built
+automatically when no targets are specified, use `emk.autobuild()` (for example, in this case you would use `emk.autobuild("revision.h")`).
+See the [Manual](../docs/manual.md#loading-sequence) for more information about emk's loading process and which targets will be built.
+
 #### C file
 
 We just have a simple C program `revision.c` that prints out the git information from the generated header file:
