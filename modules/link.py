@@ -386,7 +386,7 @@ class Module(object):
                             Relative paths will be resolved relative to the current scope.
       local_static_libs  -- A list of paths to static libraries to link in; not transitively included.
                             Relative paths will be resolved relative to the current scope.
-      syslibs            -- A list of library names to link in (like '-l<name.'). Transitively included by links that depend on this directory.
+      syslibs            -- A list of library names to link in (like '-l<name>.'). Transitively included by links that depend on this directory.
       local_syslibs      -- A list of library names to link in; not transitively included.
       syslib_paths       -- A list of directories to search for named libraries (ie syslibs). Transitively included by links that depend on this directory.
                             Relative paths will be resolved relative to the current scope.

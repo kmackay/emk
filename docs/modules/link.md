@@ -81,10 +81,10 @@ All properties are inherited from the parent scope if there is one.
  * **lib_prefix**: The prefix to use for static/shared libraries. Set to "lib" by default.
   
  * **shared_libname**: The name to use for the generated shared library (if any). If set to None, the library name will
-                       be <lib_prefix><current directory name><shared_lib_ext>. The default value is None.
+                       be &lt;lib_prefix>&lt;current directory name>&lt;shared_lib_ext>. The default value is None.
  * **static_libname**: The name to use for the generated lib_in_lib static library (if any). If set to None, the library name will
-                       be <lib_prefix><current directory name>_all<static_lib_ext>. The default value is None.
-                       Note that the regular static library (not lib_in_lib) is always named <lib_prefix><current directory name><static_lib_ext>.
+                       be &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext>. The default value is None.
+                       Note that the regular static library (not lib_in_lib) is always named &lt;lib_prefix>&lt;current directory name>&lt;static_lib_ext>.
   
  * **detect_exe**: The method to use for executable detection (ie, if an object file exports a main() function).
                    If set to "exact", the link module uses the linker instance's 'contains_main_function' method
@@ -103,7 +103,7 @@ All properties are inherited from the parent scope if there is one.
                         The default value is False.
  * **strip**: Whether or not to strip the resulting shared library and/or executables. The default value is False.
  * **lib_in_lib**: If True (and a static library is being created), the link module will create an additional static library
-                   named <lib_prefix><current directory name>_all<static_lib_ext> (or <static_libname>, if set) which
+                   named &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext> (or &lt;static_libname>, if set) which
                    contains the local library contents as well as the contents of all library dependencies from 'local_static_libs',
                    and transitively all 'static_libs', 'depdirs', and 'projdirs' libraries - ie the link module will recursively
                    gather all the static library dependencies from all the dependency directories. Useful for generating a
@@ -113,7 +113,7 @@ All properties are inherited from the parent scope if there is one.
   
  * **exe_objs**: A list of object files to link into executables (without checking whether they contain a main() function).
  * **non_exe_objs**: A list of object files that should not be linked into an executable, even if they contain a main() function.
- * **objects**: A dict mapping <object file>: <source file>. This allows the link module to determine which source file
+ * **objects**: A dict mapping &lt;object file>: &lt;source file>. This allows the link module to determine which source file
                 was compiled to each object file when "simple" main detection is being used. Filled in by the c module.
  * **obj_nosrc**: A list of object files for which the source file is not known.
  * **non_lib_objs**: A list of object files which should not be linked into a library (static or shared).
@@ -128,7 +128,7 @@ All properties are inherited from the parent scope if there is one.
                     Relative paths will be resolved relative to the current scope.
  * **local_static_libs**: A list of paths to static libraries to link in; not transitively included.
                           Relative paths will be resolved relative to the current scope.
- * **syslibs**: A list of library names to link in (like '-l<name.'). Transitively included by links that depend on this directory.
+ * **syslibs**: A list of library names to link in (like '-l&lt;name>.'). Transitively included by links that depend on this directory.
  * **local_syslibs**: A list of library names to link in; not transitively included.
  * **syslib_paths**: A list of directories to search for named libraries (ie syslibs). Transitively included by links that depend on this directory.
                      Relative paths will be resolved relative to the current scope.

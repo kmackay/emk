@@ -1745,8 +1745,11 @@ class EMK(EMK_Base):
         
         Then, the first build phase starts. If explicit targets have been specified and they can all be resolved, only those
         targets (and their dependencies) are examined. Otherwise, all autobuild targets (and their dependencies) are examined.
-        Examined targets will be run if the dependencies have changed (or if the products have changed and have been declared
-        as rebuld_if_changed).
+        The rule that produces each examined target will be executed if the dependencies have changed (or if the products have changed
+        and have been declared as rebuild_if_changed). Target examination will proceed through the dependency tree until it reaches
+        dependencies that exist and have no rule to make them (ie, normal files that are not generated as part of the build process).
+        Rules are executed in dependency order, so dependencies are built before the things that depend on them (as you would expect).
+        There is no ordering between rules with no dependency relationship.
         
         Building continues until everything that can be built (from the set of examined targets) has been built. Note that it is
         possible that not all examined targets could be built immediately, since they may depend on things for which rules have

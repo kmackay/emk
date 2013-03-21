@@ -34,20 +34,20 @@ All properties are inherited from the parent scope if there is one.
 
  * **compiler**: The compiler instance that is used to load dependencies and compile C/C++ code.
  * **include_dirs**: A list of additional include directories for both C and C++ code.
- * **defines**: A dict of <name>: <value> defines for both C and C++; each entry is equivalent to #define <name> <value>.
+ * **defines**: A dict of &lt;name>: &lt;value> defines for both C and C++; each entry is equivalent to #define &lt;name> &lt;value>.
  * **flags**: A list of flags for both C and C++. If you have a 'flag' that is more than one argument,
               pass it as a tuple. Example: ("-isystem", "/path/to/extra/sys/includes"). Duplicate flags will be removed.
  * **source_files**: A list of files that should be included for compilation. Files will be built as C or C++ depending on the file extension.
   
  * **c.exts**: The list of file extensions (suffixes) that will be considered as C code. The default is [".c"].
  * **c.include_dirs**: A list of additional include directories for C code.
- * **c.defines**: A dict of <name>: <value> defines for C.
+ * **c.defines**: A dict of &lt;name>: &lt;value> defines for C.
  * **c.flags**: A list of flags for C.
  * **c.source_files**: A list of C files that should be included for compilation (will be built as C code).
   
  * **cxx.exts**: The list of file extensions (suffixes) that will be considered as C++ code. The default is [".cpp", ".cxx", ".c++", ".cc"].
  * **cxx.include_dirs**: A list of additional include directories for C++ code.
- * **cxx.defines**: A dict of <name>: <value> defines for C++.
+ * **cxx.defines**: A dict of &lt;name>: &lt;value> defines for C++.
  * **cxx.flags**: A list of flags for C++.
  * **cxx.source_files**: A list of C++ files that should be included for compilation (will be built as C++ code).
   
@@ -85,7 +85,7 @@ Arguments:
  * **source**: The C source file path to compile.
  * **dest**: The output object file path.
  * **includes**: A list of extra include directories.
- * **defines**: A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+ * **defines**: A dict of &lt;name>: &lt;value> entries to be used as defines; each entry is equivalent to #define &lt;name> &lt;value>.
  * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
               the emk utils module: 'flattened = utils.flatten(flags)'.
 
@@ -96,6 +96,6 @@ Arguments:
  * **source**: The C++ source file path to compile.
  * **dest**: The output object file path.
  * **includes**: A list of extra include directories.
- * **defines**: A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+ * **defines**: A dict of &lt;name>: &lt;value> entries to be used as defines; each entry is equivalent to #define &lt;name> &lt;value>.
  * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
               the emk utils module: 'flattened = utils.flatten(flags)'.

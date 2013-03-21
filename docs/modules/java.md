@@ -4,7 +4,7 @@ Java Module
 The java module is an emk module for compiling Java code and creating jar files. This module will autodetect .java files
 in the current directory, compile them (with javac), and create a jar file out of the compiled classes. It will also autodetect
 classes that contain a main() method; for each class with a main() method, the java module will create an executable jar
-(named <class name>.jar) that can be run using "java -jar <class name>.jar".
+(named &lt;class name>.jar) that can be run using "java -jar &lt;class name>.jar".
 
 Note that autodetection of main() methods will only work if the main() method is in the toplevel class in the
 .java file (ie, it won't work if the main() method is in a static inner class). However you can explicitly
@@ -44,7 +44,7 @@ All properties are inherited from the parent scope if there is one.
                   the relative jar path is that path relative to the jar file root where the source will be added.
   
  * **make_jar**: If True, all compiled java classes in the current directory will be added into a single jar file.
-                 The default jar file path is <build dir>/<directory name>.jar. The default value is True.
+                 The default jar file path is &lt;build dir>/&lt;directory name>.jar. The default value is True.
  * **jarname**: If not None, this string will be used as the jar name instead of the name of the current directory. The default value is None.
  * **jar_in_jar**: If True, the contents of all jar dependencies (ie, from depdirs and projdirs) will be included in the generated
                    jar file for the current directory (assuming make_jar is True). The default value is False.

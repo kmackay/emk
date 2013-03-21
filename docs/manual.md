@@ -8,7 +8,7 @@ Arguments
 `emk target1 option1=val target2 ....`
 
 Arguments to emk can either be options or targets. An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
-as explicit targets to be built. You may specify targets that contain '=' using the special option "explicit_target=<target name>". All options (whether
+as explicit targets to be built. You may specify targets that contain '=' using the special option "explicit_target=&lt;target name>". All options (whether
 or not they are recognized by emk) can be accessed via the emk.options dict.
         
 If no explicit targets are specified, emk will build all autobuild targets.
@@ -55,7 +55,7 @@ Loading Sequence
 ----------------
 
 The build process in a given directory goes as follows:
-  1. Load the global emk config from `<emk dir>/config/emk_global.py` (where <emk dir> is the directory containing the emk.py module),
+  1. Load the global emk config from `<emk dir>/config/emk_global.py` (where &lt;emk dir> is the directory containing the emk.py module),
      if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
      working directory to the directory containing the config file. Note that the global config file may be a symlink.
   2. Find the project directory. The project directory is the closest ancestor to the current directory that
@@ -64,7 +64,7 @@ The build process in a given directory goes as follows:
   3. Load the project file `emk_project.py` from the project directory if it exists and has not already been loaded (creates a new scope, with the global scope as a parent).
   4. For each directory from the project directory to the current directory, load `emk_subproj.py` from that directory
      if it exists and has not already been loaded (creates a new scope, with the previous scope as a parent).
-  5. Create the rules scope for the current directory (creates a new scope).
+  5. Create a new scope for the current directory (the "rules scope").
   6. Load any premodules (specified via appending to the `emk.pre_modules` list).
   7. Load `emk_rules.py` from the current directory if it exists; otherwise, load the default modules (if any; specified by appending to the `emk.default_modules` list).
   8. Run any module post_rules() methods for modules loaded into the rules scope.
@@ -77,8 +77,11 @@ a new directory to recurse into, emk will handle that directory immediately afte
 
 Then, the first build phase starts. If explicit targets have been specified and they can all be resolved, only those
 targets (and their dependencies) are examined. Otherwise, all autobuild targets (and their dependencies) are examined.
-Examined targets will be run if the dependencies have changed (or if the products have changed and have been declared
-as rebuild_if_changed).
+The rule that produces each examined target will be executed if the dependencies have changed (or if the products have changed
+and have been declared as rebuild_if_changed). Target examination will proceed through the dependency tree until it reaches
+dependencies that exist and have no rule to make them (ie, normal files that are not generated as part of the build process).
+Rules are executed in dependency order, so dependencies are built before the things that depend on them (as you would expect).
+There is no ordering between rules with no dependency relationship.
 
 Building continues until everything that can be built (from the set of examined targets) has been built. Note that it is
 possible that not all examined targets could be built immediately, since they may depend on things for which rules have
@@ -111,7 +114,7 @@ emk Object
 ----------
 
 Whenever emk is running, the `emk` object is available as a builtin. You do not need to (and should not) try to import emk in your emk modules
-or config files; you can just use emk.<whatever> directly.
+or config files; you can just use emk.&lt;whatever> directly.
 
 ### Global read-only properties (not based on current scope):
  * **log**: The emk log (named 'emk'). Modules should create sub-logs of this to use the emk logging features.
@@ -136,7 +139,7 @@ or config files; you can just use emk.<whatever> directly.
  * **scope_name**: The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
  * **proj_dir**: The absolute path of the project directory for the current scope.
  * **scope_dir**: The absolute path of the directory in which the scope was created
-                  (eg, the directory from which the emk_<scope name>.py file was loaded).
+                  (eg, the directory from which the emk_&lt;scope name>.py file was loaded).
  * **local_targets**: The dict of potential targets (ie, rule products) defined in the current scope.
                       This maps the original target path (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
  * **current_rule**: The currently executing rule (an emk.Rule instance), or None if a rule is not being executed.
@@ -162,7 +165,7 @@ the scope's module search paths (`emk.module_paths`). Note that the module searc
 relative paths and project/build dir placeholders are replaced based on the current scope. If the Python
 module is found, it is imported (if it was not previously imported), with the current working directory
 set to the directory that the Python module was found in. An emk module instance is created by calling
-Module(<current scope name>) on the Python module instance. This can be any callable that returns an
+Module(&lt;current scope name>) on the Python module instance. This can be any callable that returns an
 emk module instance, but is usually a class named Module.
 
 An emk module instance must provide a new_scope() method that takes the new scope type, and returns an
@@ -190,7 +193,8 @@ Arguments:
 that could not be loaded. If only one name is provided, the result will be a value rather than a list (for convenience,
 so that you can write `mymod = emk.module("my_module")`, but also write `c, link = emk.module("c", "link")`).
 
-You can also use `emk.weak_module` to load one or emk modules into the current scope, without causing their post_<scope type>() methods to be called.
+You can also use `emk.weak_module` to load one or emk modules into the current scope, without causing their post_&lt;scope type>() methods to be called.
+This would be used for example if you want to configure a module, but do not want it to do anything in the current scope.
 
 ### Inserting Modules
 
@@ -199,7 +203,7 @@ This method allows you to create a module instance and provide it for use by chi
 create an actual Python module file to import. The instance will be installed into the current scope as a weak
 module, so the current scope can also load it using emk.module() if desired after it has been inserted.
 
-When the module instance is being inserted, its load_<scope type>() method will be called, if present. If a module
+When the module instance is being inserted, its load_&lt;scope type>() method will be called, if present. If a module
 instance of the same name already exists in the current scope (either as a normal module or weak module), a build
 error will be raised; however you can insert a module that will override a module in any parent scope (or a Python module)
 as long as the current scope has not yet loaded it.
