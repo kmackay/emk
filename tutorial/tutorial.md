@@ -28,10 +28,10 @@ emk.module("c")
 ```
 
 This sets up emk to automatically detect and build C and C++ source files, and link them into static libraries or executables (depending on
-whether or not the source file defines a main() function).
+whether or not the source file defines a `main()` function).
 
 #### C files
-Create a header file `print_function.h` declaring a do_print() function:
+Create a header file `print_function.h` declaring a `do_print()` function:
 ```c
 #ifndef PRINT_FUNCTION_H
 #define PRINT_FUNCTION_H
@@ -41,7 +41,7 @@ void do_print(void);
 #endif
 ```
 
-And create `print_function.c` to actually implement do_print():
+And create `print_function.c` to actually implement `do_print()`:
 ```c
 #include "print_function.h"
 
@@ -54,7 +54,7 @@ void do_print(void)
 
 ```
 
-Now create a C program `print.c` that will call do_print():
+Now create a C program `print.c` that will call `do_print()`:
 ```c
 #include "print_function.h"
 
@@ -68,7 +68,7 @@ int main()
 
 #### Building
 
-Run `emk` in the directory; remember that all build output will be placed in the __build__ directory (which is created if needed). emk's c module
+Run `emk` in the directory; remember that all build output will be placed in the `__build__` directory (which is created if needed). emk's c module
 will compile and link the C files into a static library `lib1_basics.a` (containing the compiled `print_function.c`) and an executable `print`
 (from `print.c`). You can now run the executable:
 ```
@@ -92,10 +92,10 @@ emk.module("java")
 ```
 
 This sets up emk to automatically detect and build Java source files, and link them into a jar file. An executable jar file will be created for
-any Java class that contains a main() method.
+any Java class that contains a `main()` method.
 
 #### Java files
-Create a java file `PrintFunction.java` containing a do_print() method:
+Create a java file `PrintFunction.java` containing a `do_print()` method:
 ```java
 class PrintFunction
 {
@@ -106,7 +106,7 @@ class PrintFunction
 }
 ```
 
-Now create a Java program `print.java` that will call do_print():
+Now create a Java program `print.java` that will call `do_print()`:
 ```java
 class print
 {
@@ -119,8 +119,8 @@ class print
 
 #### Building
 
-Run `emk` in the directory; remember that all build output will be placed in the __build__ directory (which is created if needed). emk's java module will
-compile the java files and put them into a `2_java.jar` file; it will also create an executable `print.jar` that will call the main() method of the `print`
+Run `emk` in the directory; remember that all build output will be placed in the `__build__` directory (which is created if needed). emk's java module will
+compile the java files and put them into a `2_java.jar` file; it will also create an executable `print.jar` that will call the `main()` method of the `print`
 class. You can now run `print.jar`:
 ```
 xxxx:2_java kmackay$ java -jar __build__/print.jar
@@ -388,7 +388,7 @@ int main()
 
 #### Building
 
-Run `emk` in the directory; remember that all build output will be placed in the __build__ directory (which is created if needed). You can now run the
+Run `emk` in the directory; remember that all build output will be placed in the `__build__` directory (which is created if needed). You can now run the
 `revision` executable:
 ```
 xxxx:4_rules kmackay$ __build__/revision 
@@ -531,7 +531,7 @@ int main()
 
 #### Building
 
-Run `emk` in the `5_modules` directory; remember that all build output will be placed in the __build__ directory (which is created if needed). You can now run the
+Run `emk` in the `5_modules` directory; remember that all build output will be placed in the `__build__` directory (which is created if needed). You can now run the
 `revision` executable:
 ```
 xxxx:5_modules kmackay$ __build__/revision 
