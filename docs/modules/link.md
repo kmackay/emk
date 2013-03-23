@@ -19,7 +19,7 @@ You can also build a shared library instead of or in addition to the static libr
 the object files linked into a shared library must be compiled as position independent code (eg '-fPIC' or '-fpic' with gcc).
 You must configure the necessary flags in the c module for this to work.
 
-Using the `depdirs` or `projdirs` properties, you can specify dependencies on other directories that are build using emk.
+Using the `depdirs` or `projdirs` properties, you can specify dependencies on other directories that are built using emk.
 When linking an executable or shared library, emk will gather all (non-local) linker flags and libraries from all depdirs and projdirs
 (transitively) to pass to the linker. This allows you to specify flags with the code that requires them, instead of where
 that code is being linked in.
@@ -41,7 +41,7 @@ If the 'detect_exe' property is set to "exact", then the link module defines an 
 which depends on all object files. This will cause all object files to be built if required in the first build phase,
 so that main() detection can occur in postbuild.
 
-For an object file <name>.o that is being linked into an executable, the generated executable path will be <build dir>/<name><link.exe_ext>
+For an object file &lt;name>.o that is being linked into an executable, the generated executable path will be &lt;build dir>/&lt;name>&lt;link.exe_ext>
 (note that the 'exe_ext' property is "" by default).
 
 Classes
