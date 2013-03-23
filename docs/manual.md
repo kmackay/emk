@@ -78,7 +78,7 @@ a new directory to recurse into, emk will handle that directory immediately afte
 Then, the first build phase starts. If explicit targets have been specified and they can all be resolved, only those
 targets (and their dependencies) are examined. Otherwise, all autobuild targets (and their dependencies) are examined.
 The rule that produces each examined target will be executed if the dependencies have changed (or if the products have changed
-and have been declared as rebuild_if_changed). Target examination will proceed through the dependency tree until it reaches
+and have been declared as `rebuild_if_changed`). Target examination will proceed through the dependency tree until it reaches
 dependencies that exist and have no rule to make them (ie, normal files that are not generated as part of the build process).
 Rules are executed in dependency order, so dependencies are built before the things that depend on them (as you would expect).
 There is no ordering between rules with no dependency relationship.
@@ -143,7 +143,7 @@ or config files; you can just use emk.&lt;whatever> directly.
                             emk.current_rule and emk.rule_cache() are available.
 
 ### Scoped read-only properties (apply only to the current scope):
- * **scope_name**: The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules].
+ * **scope_name**: The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules'].
  * **proj_dir**: The absolute path of the project directory for the current scope.
  * **scope_dir**: The absolute path of the directory in which the scope was created
                   (eg, the directory from which the emk_&lt;scope name>.py file was loaded).
@@ -154,7 +154,7 @@ or config files; you can just use emk.&lt;whatever> directly.
 ### Scoped modifiable properties (inherited by child scopes):
  * **build_dir**: The build directory path (may be relative or absolute). The default value is "__build__".
  * **module_paths**: Additional absolute paths to search for modules.
- * **default_modules**: Modes that are loaded if no emk_rules.py file is present.
+ * **default_modules**: Modules that are loaded if no emk_rules.py file is present.
  * **pre_modules**: Modules that are preloaded before each emk_rules.py file is loaded.
 
 Modules
@@ -205,7 +205,7 @@ This would be used for example if you want to configure a module, but do not wan
 
 ### Inserting Modules
 
-Using `emk.insert_module(name, instance)`, you can an emk module instance into the current scope as a weak module.
+Using `emk.insert_module(name, instance)`, you can insert an emk module instance into the current scope as a weak module.
 This method allows you to create a module instance and provide it for use by child scopes without needing to
 create an actual Python module file to import. The instance will be installed into the current scope as a weak
 module, so the current scope can also load it using emk.module() if desired after it has been inserted.
@@ -244,7 +244,7 @@ Targets and Dependencies
 
 As in most build systems, emk rules specify sets of products (that the rules produce when executed) and dependencies (that
 must be up-to-date before the rule can be executed). When building, emk attempts to make the required set of targets (either specified
-on the command line, or autobuild targets) up-to-date by walking the dependency graph from the targets (as prducts of rules) back to files
+on the command line, or autobuild targets) up-to-date by walking the dependency graph from the targets (as products of rules) back to files
 that exist but have no rules to make them. Then, any rules whose dependencies have changed will be executed (in parallel if possible)
 until all the required targets have been produced.
 
@@ -275,7 +275,7 @@ produced (they must be either present in the filesystem, or declared virtual usi
 the list of productions and requirements may contain both relative and absolute paths; emk will convert everything to absolute paths before
 passing them to the rule function.
 
-Rules may be declared as either cwd-safe or cwd-unsafe (using the cwd_safe keyword argument).
+Rules may be declared as either cwd-safe or cwd-unsafe (using the `cwd_safe` keyword argument).
 cwd-safe rules may be executed in parallel and must not depend on the current working directory.
 cwd-unsafe rules are all executed by a single thread; the current working directory will be set to
 the scope directory that the rule was created in (eg, the directory containing emk_rules.py) before the rule is executed.
@@ -298,8 +298,8 @@ Arguments:
                  passed as the first argument to the rule function.
  * **requires**: List of paths that the rule requires to be built before it can be executed (ie, dependencies).
                  The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
-                 be resolved according to each path. Empty paths ("") are ignored. May include the special
-                 emk.ALWAYS_BUILD token to indicate that the rule should always be executed. This argument will be
+                 be resolved according to each path. Empty paths ("") are ignored. This may include the special
+                 `emk.ALWAYS_BUILD` token to indicate that the rule should always be executed. This argument will be
                  converted into a list of canonical paths, and passed as the second argument to the rule function.
  * **args**: Additional arguments that will be passed to the rule function.
  * **kwargs**: Keyword arguments - see below.
