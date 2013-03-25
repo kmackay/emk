@@ -54,6 +54,13 @@ Arguments:
  * **path**: The file or directory tree to delete.
  * **print_msg**: If True, a log message is printed about the removal. The default value is False.
 
+#### `utils.symlink(source, link_name)`
+Create a symbolic link pointing to source named link_name.  If symbolic links are not supported, then the source will be copied to link_name.
+
+Arguments:
+  * **source**: The file or directory that the link is to point to.
+  * **link_name**: The name of the link to create.
+
 #### `utils.call(*args, **kwargs)`
 Call a subprocess. Returns a tuple (stdout, stderr, exit code).
 
