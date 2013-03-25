@@ -2507,33 +2507,46 @@ def setup(args=[]):
 def main(args):
     """
     Execute the emk build process in the current directory.
-    
+
     Arguments:
-      args -- A list of arguments to emk. Arguments can either be options or targets.
-            An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
-            as explicit targets to be built. You may specify targets that contain '=' using the special option
-            "explicit_target=<target name>". All options (whether or not they are recognized by emk) can be
-            accessed via the emk.options dict.
+      args -- A list of arguments to emk. Arguments can either be options or
+              targets.  An option is an argument of the form "key=value". Any
+              arguments that do not contain '=' are treated as explicit targets to
+              be built. You may specify targets that contain '=' using the special
+              option "explicit_target=<target name>". All options (whether or not
+              they are recognized by emk) can be accessed via the emk.options dict.
             
-            If no explicit targets are specified, emk will build all autobuild targets.
-    
+              If no explicit targets are specified, emk will build all autobuild
+              targets.
+
     Recognized options:
-      log     -- The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"],
-                 although error and critical are probably not useful. The default value is "info".
-      emk_dev -- If set to "yes", developer mode is turned on. Currently this disables stack filtering so
-                 that errors within emk can be debugged. The default value is "no".
-      threads -- Set the number of threads used by emk for building. May be either a positive number, or "x".
-                 If the value is a number, emk will use that many threads for building; if the value is "x",
-                 emk will use as many threads as there are cores on the build machine. The default value is "x".
-      style   -- Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no", log output styling
-                 is disabled. If set to "console", ANSI escape codes will be used to color log output (not yet supported
-                 on Windows). If set to "html", the log output will be marked up with <div> and <span> tags that can then
-                 be styled using CSS. If set to "passthrough", the style metadata will be output directly (useful if emk is calling
-                 itself as a subprocess). The default value is "console".
-      trace   -- Specify a set of targets to trace for debugging purposes. The trace for each target will be printed once the build is complete.
-                 The targets are specified as a list of comma-separated paths, which may be relative to the current directory or absolute.
-                 Build and project directory placeholders will be replaced based on the current directory.
-      trace_unchanged -- If set to "yes", the tracer will trace through targets that were not modified as well. The default value is "no".
+      log     -- The log level that emk will use. May be one of ["debug", "info",
+                 "warning", "error", "critical"], although error and critical are
+                 probably not useful. The default value is "info".
+      emk_dev -- If set to "yes", developer mode is turned on. Currently this
+                 disables stack filtering so that errors within emk can be
+                 debugged. The default value is "no".
+      threads -- Set the number of threads used by emk for building. May be either
+                 a positive number, or "x".  If the value is a number, emk will use
+                 that many threads for building; if the value is "x", emk will use
+                 as many threads as there are cores on the build machine. The
+                 default value is "x".
+      style   -- Set the log style mode. May be one of ["no", "console", "html",
+                 "passthrough"]. If set to "no", log output styling is disabled. If
+                 set to "console", ANSI escape codes will be used to color log
+                 output (not yet supported on Windows). If set to "html", the log
+                 output will be marked up with <div> and <span> tags that can then
+                 be styled using CSS. If set to "passthrough", the style metadata
+                 will be output directly (useful if emk is calling itself as a
+                 subprocess). The default value is "console".
+      trace   -- Specify a set of targets to trace for debugging purposes. The
+                 trace for each target will be printed once the build is complete.
+                 The targets are specified as a list of comma-separated paths,
+                 which may be relative to the current directory or absolute. Build
+                 and project directory placeholders will be replaced based on the
+                 current directory.
+      trace_unchanged -- If set to "yes", the tracer will trace through targets
+                         that were not modified as well. The default value is "no".
     """
     try:
         setup(args).run(os.getcwd())
