@@ -462,16 +462,23 @@ class Module(object):
         else:
             self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
             self.main_function_regex = re.compile(r'int\s+main\s*\(')
+            self.static_lib_ext = ".a"
+            self.exe_ext = ""
+            self.lib_prefix = "lib"
             
             if sys.platform == "darwin":
                 self.linker = _OsxGccLinker()
                 self.shared_lib_ext = ".dylib"
+            elif sys.platform == "win32":
+                self.linker = _GccLinker()
+                self.shared_lib_ext = ".dll"
+                self.static_lib_ext = ".lib"
+                self.exe_ext = ".exe"
+                self.lib_prefix = ""
+                self.main_function_regex = re.compile(r'(int\s+main\s*\()|(WinMain\s*\()')
             else:
                 self.linker = _GccLinker()
                 self.shared_lib_ext = ".so"
-            self.static_lib_ext = ".a"
-            self.exe_ext = ""
-            self.lib_prefix = "lib"
             
             self.shared_libname = None
             self.static_libname = None
