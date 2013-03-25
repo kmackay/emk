@@ -591,7 +591,6 @@ class Module(object):
                 emk.require_rule(os.path.join(emk.build_dir, libname))
                 
             emk.do_prebuild(self._create_interim_rule)
-            emk.do_postbuild(self._create_rules)
         else:
             emk.do_prebuild(self._create_rules)
         
@@ -599,9 +598,13 @@ class Module(object):
     
     def _create_interim_rule(self):
         all_objs = set(self.obj_nosrc) | set([obj for obj, src in self.objects.items()]) | set(self.exe_objs)
-        utils.mark_virtual_rule(["link.__interim__"], all_objs)
+        emk.rule(self._interim_rule, "link.__interim__", all_objs)
         emk.autobuild("link.__interim__")
         
+    def _interim_rule(self, produces, requires):
+        self._create_rules()
+        emk.mark_virtual(produces)
+
     def _simple_detect_exe(self, sourcefile):
         with open(sourcefile) as f:
             data = f.read()
@@ -626,15 +629,9 @@ class Module(object):
                     exe_objs.add(obj)
         elif self.detect_exe.lower() == "exact":
             for obj, src in self.objects.items():
-                if not os.path.exists(obj):
-                    raise emk.BuildError("%s did not exist when the link module tried to examine it. \
-Maybe it depends on something which there is no rule to make?" % (obj))
                 if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
             for obj in obj_nosrc:
-                if not os.path.exists(obj):
-                    raise emk.BuildError("%s did not exist when the link module tried to examine it. \
-Maybe it depends on something which there is no rule to make?" % (obj))
                 if (not obj in exe_objs) and (not obj in non_exe_objs) and self.linker.contains_main_function(obj):
                     exe_objs.add(obj)
         
