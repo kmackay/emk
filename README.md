@@ -30,8 +30,9 @@ Installation
 ------------
 
 If desired, you can run `(sudo) setup.py install` to create a symlink at /usr/bin/emk pointing to
-the emk script in the current directory. You can run `(sudo) setup.py uninstall` to remove /usr/bin/emk
-if it is a symlink to the emk script in the current directory.
+the emk script in the current directory on *nix platforms or add it to the PATH on Windows. You
+can run `(sudo) setup.py uninstall` to remove /usr/bin/emk if it is a symlink to the emk script in
+the current directory on *nix platforms, or to remove it from the PATH on Windows.
 
 Note that emk does not require installation; it can be run directly from any directory. The only requirement
 is that the emk script and the emk.py module must be in the same directory. Typically that directory
