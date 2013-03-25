@@ -39,6 +39,7 @@ if sys.platform == "win32":
                 items.remove(path)
                 value = ';'.join(items)
                 winreg.SetValueEx(self.key, 'PATH', 0, winreg.REG_EXPAND_SZ, value)
+                self.SendMessage(self.HWND_BROADCAST, self.WM_SETTINGCHANGE, 0, 'Environment')
                 return True
             return False
 
