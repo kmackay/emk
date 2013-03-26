@@ -598,6 +598,7 @@ class Module(object):
     
     def _create_interim_rule(self):
         all_objs = set(self.obj_nosrc) | set([obj for obj, src in self.objects.items()]) | set(self.exe_objs)
+        all_objs.add(emk.ALWAYS_BUILD)
         emk.rule(self._interim_rule, "link.__interim__", all_objs)
         emk.autobuild("link.__interim__")
         
