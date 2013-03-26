@@ -2,6 +2,7 @@ import os
 import logging
 import shlex
 import re
+import struct
 
 log = logging.getLogger("emk.c")
 
@@ -23,7 +24,7 @@ class _GccCompiler(object):
       c_path   -- The path of the C compiler (eg "gcc").
       cxx_path -- The path of the C++ compiler (eg "g++").
     """
-    def __init__(self, path_prefix=""):
+    def __init__(self, path_prefix="", bits=32):
         """
         Create a new GccCompiler instance.
         
@@ -31,9 +32,11 @@ class _GccCompiler(object):
           path_prefix -- The prefix to use for the gcc/g++ executables. For example, if you had a 32-bit Linux cross compiler
                          installed into /cross/linux, you might use 'c.compiler = c.GccCompiler("/cross/linux/bin/i686-pc-linux-gnu-")'
                          to configure the c module to use the cross compiler. The default value is "" (ie, use the system gcc/g++).
+          bits        -- The target integer size.
         """
         self.c_path = path_prefix + "gcc"
         self.cxx_path = path_prefix + "g++"
+        self.bits = bits
     
     def load_extra_dependencies(self, path):
         """
@@ -58,6 +61,7 @@ class _GccCompiler(object):
         dep_file = dest + ".dep"
         args = [exe]
         args.extend(self.depfile_args(dep_file))
+        args.extend(["-m%u" % self.bits])
         args.extend(["-I%s" % (emk.abspath(d)) for d in includes])
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
         args.extend(utils.flatten(flags))
@@ -197,7 +201,8 @@ class Module(object):
             
             self.unique_names = parent.unique_names
         else:
-            self.compiler = _GccCompiler()
+            bits = struct.calcsize("P") * 8
+            self.compiler = self.GccCompiler(bits=bits)
             
             self.include_dirs = []
             self.defines = {}
