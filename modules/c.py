@@ -3,6 +3,7 @@ import logging
 import shlex
 import re
 import struct
+import sys
 
 log = logging.getLogger("emk.c")
 
@@ -24,7 +25,7 @@ class _GccCompiler(object):
       c_path   -- The path of the C compiler (eg "gcc").
       cxx_path -- The path of the C++ compiler (eg "g++").
     """
-    def __init__(self, path_prefix="", bits=32):
+    def __init__(self, path_prefix=""):
         """
         Create a new GccCompiler instance.
         
@@ -32,11 +33,9 @@ class _GccCompiler(object):
           path_prefix -- The prefix to use for the gcc/g++ executables. For example, if you had a 32-bit Linux cross compiler
                          installed into /cross/linux, you might use 'c.compiler = c.GccCompiler("/cross/linux/bin/i686-pc-linux-gnu-")'
                          to configure the c module to use the cross compiler. The default value is "" (ie, use the system gcc/g++).
-          bits        -- The target integer size.
         """
         self.c_path = path_prefix + "gcc"
         self.cxx_path = path_prefix + "g++"
-        self.bits = bits
     
     def load_extra_dependencies(self, path):
         """
@@ -61,7 +60,6 @@ class _GccCompiler(object):
         dep_file = dest + ".dep"
         args = [exe]
         args.extend(self.depfile_args(dep_file))
-        args.extend(["-m%u" % self.bits])
         args.extend(["-I%s" % (emk.abspath(d)) for d in includes])
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
         args.extend(utils.flatten(flags))
@@ -109,6 +107,34 @@ class _GccCompiler(object):
           flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
                       'flattened = utils.flatten(flags)'.
         """
+        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+
+class _MingwGccCompiler(_GccCompiler):
+    """
+    Compiler class for using gcc/g++ to compile C/C++ respectively on 32-bit Windows.
+    """
+    def compile_c(self, source, dest, includes, defines, flags):
+        if "-m32" not in flags:
+            flags.extend(["-m32"])
+        self.compile(self.c_path, source, dest, includes, defines, flags)
+    
+    def compile_cxx(self, source, dest, includes, defines, flags):
+        if "-m32" not in flags:
+            flags.extend(["-m32"])
+        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+
+class _Mingw64GccCompiler(_GccCompiler):
+    """
+    Compiler class for using gcc/g++ to compile C/C++ respectively on 64-bit Windows.
+    """
+    def compile_c(self, source, dest, includes, defines, flags):
+        if "-m64" not in flags:
+            flags.extend(["-m64"])
+        self.compile(self.c_path, source, dest, includes, defines, flags)
+    
+    def compile_cxx(self, source, dest, includes, defines, flags):
+        if "-m64" not in flags:
+            flags.extend(["-m64"])
         self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
 class Module(object):
@@ -167,6 +193,8 @@ class Module(object):
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
+        self.MingwGccCompiler = _MingwGccCompiler
+        self.Mingw64GccCompiler = _Mingw64GccCompiler
         
         self.link = emk.module("link")
         self.c = emk.Container()
@@ -202,7 +230,13 @@ class Module(object):
             self.unique_names = parent.unique_names
         else:
             bits = struct.calcsize("P") * 8
-            self.compiler = self.GccCompiler(bits=bits)
+            if sys.platform == "win32":
+                if bits == 64:
+                    self.compiler = self.Mingw64GccCompiler()
+                else:
+                    self.compiler = self.MingwGccCompiler()
+            else:
+                self.compiler = self.GccCompiler()
             
             self.include_dirs = []
             self.defines = {}
