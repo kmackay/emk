@@ -100,6 +100,19 @@ class Module(object):
         except OSError:
             shutil.rmtree(path, ignore_errors=True)
     
+    def symlink(self, source, link_name):
+        """
+        Create a symbolic link pointing to source named link_name.  If symbolic links are not supported, then the source will be copied to link_name.
+        
+        Arguments:
+          source    -- The file or directory that the link is to point to.
+          link_name -- The name of the link to create.
+        """
+        try:
+            os.symlink(source, link_name)
+        except AttributeError:
+            shutil.copy(source, link_name)
+
     class cd(object):
         """
         Simple context manager for changing to a directory, and always returning to the original directory.

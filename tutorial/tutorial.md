@@ -4,9 +4,9 @@ Tutorial
 This tutorial gives examples of basic usage of emk and goes over some of the features.
 See the [Manual](../docs/manual.md) for full documentation of emk's features.
 
-Before beginning, you should install the emk symlink (by running `sudo ./setup.py install` in the root emk directory) so that you can run emk
-simply by calling `emk` (rather than needing to use an absolute or relative path). You also need gcc and binutils installed,
-and a JDK if you want to run the Java examples.
+Before beginning, you should install the emk symlink/add emk to the PATH (by running `sudo ./setup.py install` in the root
+emk directory) so that you can run emk simply by calling `emk` (rather than needing to use an absolute or relative path).
+You also need gcc and binutils installed, and a JDK if you want to run the Java examples.
 
 All of the tutorial code is available in the emk repository, in the `tutorial` directory.
 

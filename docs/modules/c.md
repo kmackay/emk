@@ -87,7 +87,7 @@ Arguments:
  * **includes**: A list of extra include directories.
  * **defines**: A dict of &lt;name>: &lt;value> entries to be used as defines; each entry is equivalent to #define &lt;name> &lt;value>.
  * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
-              the emk utils module: 'flattened = utils.flatten(flags)'.
+              the emk utils module: `flattened = utils.flatten(flags)`.
 
 #### `compile_cxx(self, source, dest, includes, defines, flags)`
 This function will be called to compile a C++ file into an object file. This function is not required if no C++ files will be compiled.
@@ -98,4 +98,4 @@ Arguments:
  * **includes**: A list of extra include directories.
  * **defines**: A dict of &lt;name>: &lt;value> entries to be used as defines; each entry is equivalent to #define &lt;name> &lt;value>.
  * **flags**: A list of additional flags. This list may contain tuples; to flatten the list, you could use
-              the emk utils module: 'flattened = utils.flatten(flags)'.
+              the emk utils module: `flattened = utils.flatten(flags)`.

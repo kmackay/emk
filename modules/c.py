@@ -2,6 +2,8 @@ import os
 import logging
 import shlex
 import re
+import struct
+import sys
 
 log = logging.getLogger("emk.c")
 
@@ -107,6 +109,34 @@ class _GccCompiler(object):
         """
         self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
+class _MingwGccCompiler(_GccCompiler):
+    """
+    Compiler class for using gcc/g++ to compile C/C++ respectively on 32-bit Windows.
+    """
+    def compile_c(self, source, dest, includes, defines, flags):
+        if "-m32" not in flags:
+            flags.extend(["-m32"])
+        self.compile(self.c_path, source, dest, includes, defines, flags)
+    
+    def compile_cxx(self, source, dest, includes, defines, flags):
+        if "-m32" not in flags:
+            flags.extend(["-m32"])
+        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+
+class _Mingw64GccCompiler(_GccCompiler):
+    """
+    Compiler class for using gcc/g++ to compile C/C++ respectively on 64-bit Windows.
+    """
+    def compile_c(self, source, dest, includes, defines, flags):
+        if "-m64" not in flags:
+            flags.extend(["-m64"])
+        self.compile(self.c_path, source, dest, includes, defines, flags)
+    
+    def compile_cxx(self, source, dest, includes, defines, flags):
+        if "-m64" not in flags:
+            flags.extend(["-m64"])
+        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+
 class Module(object):
     """
     emk module for compiling C and C++ code. Depends on the link module (and utils).
@@ -163,6 +193,8 @@ class Module(object):
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
+        self.MingwGccCompiler = _MingwGccCompiler
+        self.Mingw64GccCompiler = _Mingw64GccCompiler
         
         self.link = emk.module("link")
         self.c = emk.Container()
@@ -197,7 +229,14 @@ class Module(object):
             
             self.unique_names = parent.unique_names
         else:
-            self.compiler = _GccCompiler()
+            bits = struct.calcsize("P") * 8
+            if sys.platform == "win32":
+                if bits == 64:
+                    self.compiler = self.Mingw64GccCompiler()
+                else:
+                    self.compiler = self.MingwGccCompiler()
+            else:
+                self.compiler = self.GccCompiler()
             
             self.include_dirs = []
             self.defines = {}

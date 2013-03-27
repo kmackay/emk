@@ -308,7 +308,7 @@ class Module(object):
             utils.mkdirs(dest_dir)
             dest = os.path.join(dest_dir, n)
             utils.rm(dest)
-            os.symlink(src, dest)
+            utils.symlink(src, dest)
         
         emk.mark_virtual("java.__jar_resources__")
     
@@ -361,7 +361,7 @@ class Module(object):
             for relpath, srcpath in entries.items():
                 destpath = os.path.join(jarfile_contents, relpath)
                 utils.mkdirs(os.path.dirname(destpath))
-                os.symlink(srcpath, destpath)
+                utils.symlink(srcpath, destpath)
         
             cmd = [self.jar_cmd, "cf", jarfile, "-C", jarfile_contents, "."]
             try:

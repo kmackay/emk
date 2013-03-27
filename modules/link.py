@@ -4,6 +4,7 @@ import logging
 import re
 import shutil
 import hashlib
+import struct
 
 log = logging.getLogger("emk.link")
 
@@ -283,6 +284,54 @@ class _OsxGccLinker(_GccLinker):
         call = [cmd] + flags + ["-o", dest] + objs + abs_libs + lib_dirs + libs
         utils.call(call)
         
+class _MingwGccLinker(_GccLinker):
+    """
+    A subclass of GccLinker for linking on 32-bit Windows.
+    """
+    def __init__(self, path_prefix=""):
+        super(_MingwGccLinker, self).__init__(path_prefix)
+        self.main_nm_regex = re.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)
+
+    def shlib_opts(self):
+        """
+        Returns a list of options that the link module should use when linking a shared library.
+        """
+        opts = super(_MingwGccLinker, self).shlib_opts()
+        opts.extend(["-m32"])
+        return opts
+    
+    def exe_opts(self):
+        """
+        Returns a list of options that the link module should use when linking an executable.
+        """
+        opts = super(_MingwGccLinker, self).exe_opts()
+        opts.extend(["-m32"])
+        return opts
+
+class _Mingw64GccLinker(_GccLinker):
+    """
+    A subclass of GccLinker for linking on 64-bit Windows.
+    """
+    def __init__(self, path_prefix=""):
+        super(_Mingw64GccLinker, self).__init__(path_prefix)
+        self.main_nm_regex = re.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)
+
+    def shlib_opts(self):
+        """
+        Returns a list of options that the link module should use when linking a shared library.
+        """
+        opts = super(_Mingw64GccLinker, self).shlib_opts()
+        opts.extend(["-m64"])
+        return opts
+    
+    def exe_opts(self):
+        """
+        Returns a list of options that the link module should use when linking an executable.
+        """
+        opts = super(_Mingw64GccLinker, self).exe_opts()
+        opts.extend(["-m64"])
+        return opts
+
 link_cache = {}
 need_depdirs = {}
 
@@ -405,6 +454,8 @@ class Module(object):
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
         self.OsxGccLinker = _OsxGccLinker
+        self.MingwGccLinker = _MingwGccLinker
+        self.Mingw64GccLinker = _Mingw64GccLinker
         
         self._all_depdirs = set()
         self._depended_by = set()
@@ -462,16 +513,27 @@ class Module(object):
         else:
             self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
             self.main_function_regex = re.compile(r'int\s+main\s*\(')
-            
-            if sys.platform == "darwin":
-                self.linker = _OsxGccLinker()
-                self.shared_lib_ext = ".dylib"
-            else:
-                self.linker = _GccLinker()
-                self.shared_lib_ext = ".so"
             self.static_lib_ext = ".a"
             self.exe_ext = ""
             self.lib_prefix = "lib"
+            
+            bits = struct.calcsize("P") * 8
+            if sys.platform == "darwin":
+                self.linker = self.OsxGccLinker()
+                self.shared_lib_ext = ".dylib"
+            elif sys.platform == "win32":
+                if bits == 64:
+                    self.linker = self.Mingw64GccLinker()
+                else:
+                    self.linker = self.MingwGccLinker()
+                self.shared_lib_ext = ".dll"
+                self.static_lib_ext = ".lib"
+                self.exe_ext = ".exe"
+                self.lib_prefix = ""
+                self.main_function_regex = re.compile(r'(int\s+main\s*\()|(WinMain\s*\()')
+            else:
+                self.linker = self.GccLinker()
+                self.shared_lib_ext = ".so"
             
             self.shared_libname = None
             self.static_libname = None
