@@ -124,7 +124,7 @@ class _GccLinker(object):
             os.mkdir(d)
             
             self.extract_static_lib(lib, d)
-            files = [f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f)) and f.endswith(".o")]
+            files = [f for f in os.listdir(d) if os.path.isfile(os.path.join(d, f)) and f.endswith(self.obj_ext())]
             for file_path in files:
                 name, ext = os.path.splitext(file_path)
                 new_name = "%s_%s%s" % (name, counter, ext)
@@ -220,6 +220,12 @@ class _GccLinker(object):
         """
         utils.call(self.strip_path, "-S", "-x", path)
 
+    def obj_ext(self):
+        """
+        Get the extension of object files consumed by this linker.
+        """
+        return ".o"
+
 class _OsxGccLinker(_GccLinker):
     """
     A subclass of GccLinker for linking on OS X.
@@ -251,7 +257,7 @@ class _OsxGccLinker(_GccLinker):
                 os.mkdir(arch_dir)
                 utils.call(self.lipo_path, lib, "-thin", arch, "-output", os.path.join(arch_dir, "thin.a"), print_call=False)
                 utils.call(self.ar_path, "x", "thin.a", print_call=False, cwd=arch_dir)
-                objs.update([f for f in os.listdir(arch_dir) if os.path.isfile(os.path.join(arch_dir, f)) and f.endswith(".o")])
+                objs.update([f for f in os.listdir(arch_dir) if os.path.isfile(os.path.join(arch_dir, f)) and f.endswith(self.obj_ext())])
             for obj in objs:
                 cmd = [self.lipo_path, "-create", "-output", os.path.join(dest_dir, obj)]
                 for arch in archs:
@@ -475,6 +481,12 @@ class _MsvcLinker(object):
         # Visual Studio puts this sort of information in a separate PDB file already, so there is no need to strip it out of the binary
         pass
 
+    def obj_ext(self):
+        """
+        Get the extension of object files consumed by this linker.
+        """
+        return ".obj"
+
 link_cache = {}
 need_depdirs = {}
 
@@ -531,6 +543,8 @@ class Module(object):
       static_lib_ext -- The extension for static libraries. Set to ".a" by default.
       exe_ext        -- The extension to use for exectuables. Set to "" (empty string) by default.
       lib_prefix     -- The prefix to use for static/shared libraries. Set to "lib" by default.
+      obj_ext        -- The file extension for object files processed by the linker (eg ".o" for gcc or ".obj" for MSVC).  This property is
+                        read-only as its value is provided by the linker implementation.
       
       shared_libname -- The name to use for the generated shared library (if any). If set to None, the library name will
                         be <lib_prefix><current directory name><shared_lib_ext>. The default value is None.
@@ -710,6 +724,10 @@ class Module(object):
             self.exeflags = []
             self.local_exeflags = []
     
+    @property
+    def obj_ext(self):
+        return self.linker.obj_ext()
+
     def new_scope(self, scope):
         return Module(scope, parent=self)
     
@@ -961,7 +979,7 @@ class Module(object):
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
         try:
-            self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
+            self.linker.do_link(produces[0], [o for o in requires if o.endswith(self.obj_ext)], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
             if self.strip:
                 self.linker.strip(produces[0])
@@ -992,7 +1010,7 @@ class Module(object):
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
         try:
-            self.linker.do_link(produces[0], [o for o in requires if o.endswith('.o')], list(abs_libs), \
+            self.linker.do_link(produces[0], [o for o in requires if o.endswith(self.obj_ext)], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
             if self.strip:
                 self.linker.strip(produces[0])

@@ -91,6 +91,8 @@ All properties are inherited from the parent scope if there is one.
  * **static_lib_ext**: The extension for static libraries. Set to ".a" by default.
  * **exe_ext**: The extension to use for exectuables. Set to "" (empty string) by default.
  * **lib_prefix**: The prefix to use for static/shared libraries. Set to "lib" by default.
+ * **obj_ext**: The file extension for object files processed by the linker (eg ".o" for gcc or ".obj" for MSVC).  This property is
+                read-only as its value is provided by the linker implementation.
   
  * **shared_libname**: The name to use for the generated shared library (if any). If set to None, the library name will
                        be &lt;lib_prefix>&lt;current directory name>&lt;shared_lib_ext>. The default value is None.
@@ -216,3 +218,6 @@ if its `strip` property is True.
 
 Arguments:
  * **path**: The path of the file to strip.
+
+#### `obj_ext(self)`
+This function will be called to get the extension of object files consumed by this linker.

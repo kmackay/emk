@@ -364,7 +364,7 @@ def generate_revision_header(produces, requires):
     with open(produces[0], "w") as f:
         f.write(template % {"revision": current_revision, "url": get_git_url(emk.scope_dir)})
 
-emk.depend("$:build:$/revision.o", "revision.h")
+emk.depend("$:build:$/revision" + c.obj_ext, "revision.h")
 utils.clean_rule("revision.h")
 ```
 
@@ -387,9 +387,9 @@ without changing anything. Otherwise, it stores the new revision value in the em
 
 We need to tell emk that the C file (`revision.c`) that uses the generated header file has a dependency on the header file. This is required because emk
 must generate the header file before the C file can be compiled the first time; it is not required for normal header files since they already exist.
-To add the dependency, we call `emk.depend("$:build:$/revision.o", "revision.h")`; this tells emk that before it can compile the C file into an object file,
-it must build `revision.h`. Note that it would be possible to build a module (or modify the existing c module) to examine the C source to automatically determine
-header file dependencies so that this manual process is not required.
+To add the dependency, we call `emk.depend("$:build:$/revision" + c.obj_ext, "revision.h")`; this tells emk that before it can compile the C file into an
+object file, it must build `revision.h`. Note that it would be possible to build a module (or modify the existing c module) to examine the C source to
+automatically determine header file dependencies so that this manual process is not required.
 
 Finally we call `utils.clean_rule("revision.h")` so that `revision.h` will be deleted when `emk clean` is run.
 
@@ -538,7 +538,7 @@ Here is the contents of `emk_rules.py` (back in the `5_modules` directory):
 ```python
 emk.module_paths.append(emk.abspath("modules"))
 c, revision = emk.module("c", "revision")
-emk.depend("$:build:$/revision.o", "revision.h")
+emk.depend("$:build:$/revision" + c.obj_ext, "revision.h")
 ```
 
 > **Note:** For Visual Studio users, you should set up the compiler and linker similarly to tutorials [1](#h1) and [3](#h3) above.

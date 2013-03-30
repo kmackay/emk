@@ -50,5 +50,5 @@ def generate_revision_header(produces, requires):
     with open(produces[0], "w") as f:
         f.write(template % {"revision": current_revision, "url": get_git_url(emk.scope_dir)})
 
-emk.depend("$:build:$/revision.o", "revision.h")
+emk.depend("$:build:$/revision" + c.obj_ext, "revision.h")
 utils.clean_rule("revision.h")
