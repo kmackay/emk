@@ -292,6 +292,189 @@ class _MingwGccLinker(_GccLinker):
         super(_MingwGccLinker, self).__init__(path_prefix)
         self.main_nm_regex = re.compile(r'\s+T\s+_?((t|w)?main|WinMain(@[0-9]+)?)\s*$', re.MULTILINE)
 
+class _MsvcLinker(object):
+    """
+    Linker class for using Visual Studio's command line tools to link.
+    
+    In order for the emk link module to use a linker instance, the linker class must define the following methods:
+      contains_main_function
+      create_static_lib
+      static_lib_cwd_safe
+      shlib_opts
+      exe_opts
+      do_link
+      link_cwd_safe
+      strip
+    See the documentation for those functions in this class for more details.
+    """
+    @staticmethod
+    def vs_env(path_prefix, env_script):
+        """
+        Try to locate and load the environment of Visual Studio.
+
+        Arguments:
+          path_prefix - The prefix to use for the vcvarsall.bat file. The default value is derived from the VS*COMNTOOLS environment variable.
+        """
+        if path_prefix is None:
+            for v in [110, 100, 90, 80, 71, 70]:
+                try:
+                    path_prefix = os.path.join(os.environ["VS%uCOMNTOOLS" % v], "..", "..", "VC")
+                except KeyError:
+                    continue
+        if path_prefix is None:
+            raise BuildError("No installed version of Visual Studio could be found")
+
+        try:
+            arch = os.environ["PROCESSOR_ARCHITECTURE"].lower()
+            if arch != "amd64":
+                arch = os.environ["PROCESSOR_ARCHITEW6432"].lower()
+        except KeyError:
+            arch = "x86"
+
+        vcvars = os.path.join(path_prefix, env_script)
+        env = utils.get_environment_from_batch_command([vcvars, arch])
+        if "VCINSTALLDIR" not in env:
+            env = utils.get_environment_from_batch_command(vcvars)
+        return env
+
+    def __init__(self, path_prefix=None, env_script="vcvarsall.bat"):
+        """
+        Create a new MsvcLinker instance.
+        
+        Arguments:
+          path_prefix -- The prefix to use for the vcvarsall.bat file. The default value is derived from the VS*COMNTOOLS environment variable.
+
+        Properties:
+          dumpbin_exe -- The absolute path to the dumpbin executable.
+          lib_exe     -- The absolute path to the lib executable.
+          link_exe    -- The absolute path to the link executable.
+
+          main_dumpbin_regex -- The compiled regex to use to search for a main() function in the dumpbin output.
+        """
+        self._env = _MsvcLinker.vs_env(path_prefix, env_script)
+
+        self.dumpbin_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "dumpbin.exe")
+        self.lib_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "lib.exe")
+        self.link_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "link.exe")
+
+        self.main_dumpbin_regex = re.compile(r'[0-9a-fA-F]{3}\s+[0-9a-fA-F]{4,16}\s+SECT[0-9]+\s+notype\s+\(\)\s+External\s+\|\s+_?(w?main|WinMain)\b')
+    
+    def contains_main_function(self, objfile):
+        """
+        Determine if an object file contains a main() function.
+        
+        This is used by the link module to autodetect which object files should be linked into executables.
+        
+        Arguments:
+          objfile -- The path to the object file.
+        
+        Returns True if the object file contains a main() function, False otherwise.
+        """
+        out, err, code = utils.call(self.dumpbin_exe, "/SYMBOLS", objfile, env=self._env, print_call=False)
+        return (self.main_dumpbin_regex.search(out) is not None)
+
+    def add_to_static_lib(self, dest, files):
+        """
+        Add some files (libraries or objects) to a static library.
+        
+        If the library does not already exist, it will be created.
+        
+        Arguments:
+          dest  -- The path to the static library.
+          files -- A list of paths to files to add to the static library.
+        """
+        stdout, stderr, returncode = utils.call(self.lib_exe, "/NOLOGO", '/OUT:%s' % dest, files, env=self._env, noexit=True, print_stdout=True, print_stderr=False)
+        if returncode != 0:
+            log.info(emk.style_tag('stdout') + stdout + emk.end_style(), extra={'adorn':False})
+            stack = emk.fix_stack(traceback.extract_stack())
+            if emk.options["log"] == "debug" and emk.current_rule:
+                stack.append("Rule definition:")
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+
+    def create_static_lib(self, dest, source_objs, other_libs):
+        """
+        Create a static library (archive) containing the given object files and all object files contained in
+        the given other libs (which will be static libraries as well).
+        
+        Called by the link module to create a static library. If the link module's 'lib_in_lib' property is True,
+        the link module will pass in the library dependencies of this library in the 'other_libs' argument. This
+        method must include the contents of all the other libraries in the generated static library.
+        
+        Arguments:
+          dest        -- The path of the static library to generate.
+          source_objs -- A list of paths to object files to include in the generated static library.
+          other_libs  -- A list of paths to other static libraries whose contents should be included in the generated static library.
+        """
+        files = list(source_objs) + list(other_libs)
+
+        # we add files to the archive 32 at a time to avoid command-line length restriction issues.
+        left = len(files)
+        start = 0
+        while left > 32:
+            cur_files = files[start:start+32]
+            start += 32
+            left -= 32
+            self.add_to_static_lib(dest, cur_files)
+        cur_files = files[start:]
+        self.add_to_static_lib(dest, cur_files)
+    
+    def static_lib_cwd_safe(self):
+        """
+        Returns True if creating a static library using the create_static_lib() method is cwd_safe (ie, does not
+        use anything that depends on the current working directory); returns False otherwise.
+        """
+        return True
+    
+    def shlib_opts(self):
+        return ["/DLL"]
+    
+    def exe_opts(self):
+        return []
+
+    def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode):
+        """
+        Link a shared library or executable.
+        
+        Arguments:
+          dest        -- The path of the destination file to produce.
+          source_objs -- A list of object files to link in.
+          abs_libs    -- A list of absolute paths to (static) libraries that should be linked in.
+          lib_dirs    -- Additional search paths for relative libraries.
+          rel_libs    -- Relative library names to link in.
+          flags       -- Additional flags to be passed to the linker.
+          cxx_mode    -- If True, then the object files or libraries contain C++ code.
+        """
+        flat_flags = utils.flatten(flags)
+        lib_dir_flags = ['/LIBPATH:"%s"' % d for d in lib_dirs]
+
+        stdout, stderr, returncode = utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs, env=self._env, noexit=True, print_stdout=True, print_stderr=False)
+        if returncode != 0:
+            log.info(emk.style_tag('stdout') + stdout + emk.end_style(), extra={'adorn':False})
+            stack = emk.fix_stack(traceback.extract_stack())
+            if emk.options["log"] == "debug" and emk.current_rule:
+                stack.append("Rule definition:")
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+    
+    def link_cwd_safe(self):
+        """
+        Returns True if linking a shared library or executable using the do_link() method is cwd_safe (ie, does not
+        use anything that depends on the current working directory); returns False otherwise.
+        """
+        return True
+        
+    def strip(self, path):
+        """
+        Strip unnecessary symbols from the given shared library / executable. Called by the link module after linking
+        if its 'strip' property is True.
+        
+        Arguments:
+          path -- The path of the file to strip.
+        """
+        # Visual Studio puts this sort of information in a separate PDB file already, so there is no need to strip it out of the binary
+        pass
+
 link_cache = {}
 need_depdirs = {}
 
@@ -336,6 +519,7 @@ class Module(object):
       GccLinker      -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
       OsxGccLinker   -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
       MingwGccLinker -- A linker class that uses gcc/g++ to link on Windows, and uses ar to create static libraries.
+      MsvcLinker     -- A linker class that uses MSVC's link.exe to link, and lib.exe to create static libraries.
     
     Properties (inherited from parent scope):
       comments_regex      -- The regex to use to match (and ignore) comments when using "simple" main() detection.
@@ -416,6 +600,7 @@ class Module(object):
         self.GccLinker = _GccLinker
         self.OsxGccLinker = _OsxGccLinker
         self.MingwGccLinker = _MingwGccLinker
+        self.MsvcLinker = _MsvcLinker
         
         self._all_depdirs = set()
         self._depended_by = set()

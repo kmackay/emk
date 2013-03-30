@@ -28,6 +28,11 @@ Properties (defaults set based on the path prefix passed to the constructor):
  * **c_path**: The path of the C compiler (eg "gcc").
  * **cxx_path**: The path of the C++ compiler (eg "g++").
 
+**MsvcCompiler**: A compiler class that uses the Microsoft Visual Studio command line tools to compile.
+
+Properties (defaults set based on the path prefix passed to the constructor):
+ * **cl_exe**: The full path of the MSVC compiler (eg "C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\cl.exe").
+
 Properties
 ----------
 All properties are inherited from the parent scope if there is one.

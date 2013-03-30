@@ -68,6 +68,15 @@ Properties (defaults set based on the path prefix passed to the constructor):
 
 **MingwGccLinker**: A linker class for linking using gcc/g++ on Windows; inherits from GccLinker.
 
+**MsvcLinker**: A linker class for linking using Microsoft's Visual C++ tools on Windows.
+
+Properties (defaults set based on the path prefix passed to the constructor):
+ * **dumpbin_exe**: The absolute path to the dumpbin executable.
+ * **lib_exe**: The absolute path to the lib executable.
+ * **link_exe**: The absolute path to the link executable.
+
+ * **main_dumpbin_regex**: The compiled regex to use to search for a main() function in the dumpbin output.
+
 Properties
 ----------
 All properties are inherited from the parent scope if there is one.

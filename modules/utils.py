@@ -6,6 +6,8 @@ import shutil
 import logging
 import glob
 import filecmp
+import sys
+import itertools
 
 log = logging.getLogger("emk.utils")
 
@@ -278,3 +280,54 @@ class Module(object):
             for f in glob.glob(pattern):
                 self.rm(f, print_msg=True)
         emk.mark_virtual(produces)
+
+    def get_environment_from_batch_command(self, env_cmd, initial=None):
+        """
+        Take a command (either a single command or list of arguments)
+        and return the environment created after running that command.
+        Note that the command must be a batch file or .cmd file, or the
+        changes to the environment will not be captured.
+
+        If initial is supplied, it is used as the initial environment passed
+        to the child process.
+
+        Based on response at http://stackoverflow.com/questions/1214496/how-to-get-environment-from-a-subprocess-in-python.
+
+        Arguments:
+          env_cmd -- The command to get the post-run environment of.
+          initial -- An initial environment dictionary.
+
+        Returns:
+          A dictionary representing the environment after running the command.
+        """
+        if sys.platform != "win32":
+            raise OSError("Only supported on Windows")
+
+        def _validate_pair(ob):
+            try:
+                if not (len(ob) == 2):
+                    raise ValueError("Unexpected result: %s" % ob)
+            except:
+                return False
+            return True
+
+        def _consume(iter):
+            try:
+                while True: next(iter)
+            except StopIteration:
+                pass
+
+        if not isinstance(env_cmd, (list, tuple)):
+            env_cmd = [env_cmd]
+        tag = '___COMPLETE___'
+        
+        out, err, code = self.call(env_cmd, '&&', 'echo', tag, '&&', 'set', env=initial, shell=True, print_call=False)
+
+        lines = out.split('\n')
+        _consume(itertools.takewhile(lambda l: tag not in l, lines))
+        handle_line = lambda l: l.rstrip().split('=',1)
+
+        pairs = map(handle_line, lines)
+        valid_pairs = filter(_validate_pair, pairs)
+        result = dict(valid_pairs)
+        return result

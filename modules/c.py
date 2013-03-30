@@ -3,6 +3,7 @@ import logging
 import shlex
 import re
 import sys
+import traceback
 
 log = logging.getLogger("emk.c")
 
@@ -108,6 +109,107 @@ class _GccCompiler(object):
         """
         self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
+class _MsvcCompiler(object):
+    """
+    Compiler class for using Microsoft's Visual C++ to compile C/C++.
+    
+    In order for the emk c module to use a compiler instance, the compiler class must define the following methods:
+      load_extra_dependencies
+      compile_c
+      compile_cxx
+    See the documentation for those functions in this class for more details.
+    """
+    def __init__(self, path_prefix=None, env_script="vcvarsall.bat"):
+        """
+        Create a new MsvcCompiler instance.
+        
+        Arguments:
+          path_prefix -- The prefix to use for the vcvarsall.bat file. The default value is derived from the VS*COMNTOOLS environment variable.
+
+        Properties:
+          cl_exe -- The absolute path to the cl executable.
+        """
+        from link import _MsvcLinker
+        
+        self._env = _MsvcLinker.vs_env(path_prefix, env_script)
+        self._dep_re = re.compile(r'Note:\s+including file:\s+([^\s].*)\s*')
+
+        self.cl_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "cl.exe")
+
+    def load_extra_dependencies(self, path):
+        """
+        Load extra dependencies for the given object file path. The extra dependencies could be loaded from a generated
+        dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
+        
+        Arguments:
+          path -- The path of the object file to get dependencies for.
+        
+        Returns a list of paths (strings) of all the extra dependencies.
+        """
+        cache = emk.scope_cache(path)
+        return cache.get("secondary_deps", [])
+    
+    def compile(self, source, dest, includes, defines, flags):
+        args = [self.cl_exe, "/nologo", "/c", "/showIncludes"]
+        args.extend(['/I%s' % (emk.abspath(d)) for d in includes])
+        args.extend(['/D%s=%s' % (key, value) for key, value in defines.items()])
+        args.extend(utils.flatten(flags))
+        args.extend(['/Fo%s' % dest, source])
+
+        stdout, stderr, returncode = utils.call(args, env=self._env, noexit=True, print_stdout=False, print_stderr=False)
+        if returncode != 0:
+            log.info(emk.style_tag('stdout') + stdout + emk.end_style(), extra={'adorn':False})
+            stack = emk.fix_stack(traceback.extract_stack())
+            if emk.options["log"] == "debug" and emk.current_rule:
+                stack.append("Rule definition:")
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+
+        items = []
+        for l in stdout.split('\n'):
+            m = self._dep_re.match(l)
+            if m:
+                items.append(m.group(1))
+        unique_items = utils.unique_list(items)
+
+        # call has_changed to set up rule cache for future builds.
+        for item in unique_items:
+            emk.current_rule.has_changed(item)
+        cache = emk.scope_cache(dest)
+        cache["secondary_deps"] = unique_items
+
+    def compile_c(self, source, dest, includes, defines, flags):
+        """
+        Compile a C source file into an object file.
+        
+        Arguments:
+          source   -- The C source file path to compile.
+          dest     -- The output object file path.
+          includes -- A list of extra include directories.
+          defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
+                      'flattened = utils.flatten(flags)'.
+        """
+        if "/TC" not in flags:
+            flags.extend(["/TC"])
+        self.compile(source, dest, includes, defines, flags)
+    
+    def compile_cxx(self, source, dest, includes, defines, flags):
+        """
+        Compile a C++ source file into an object file.
+        
+        Arguments:
+          source   -- The C++ source file path to compile.
+          dest     -- The output object file path.
+          includes -- A list of extra include directories.
+          defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
+                      'flattened = utils.flatten(flags)'.
+        """
+        if "/TP" not in flags:
+            flags.extend(["/TP"])
+        self.compile(source, dest, includes, defines, flags)
+
 class Module(object):
     """
     emk module for compiling C and C++ code. Depends on the link module (and utils).
@@ -128,6 +230,7 @@ class Module(object):
     
     Classes:
       GccCompiler  -- A compiler class that uses gcc/g++ to compile.
+      MsvcCompiler -- A compiler class that uses MSVC on Windows to compile binaries.
     
     Properties (inherited from parent scope):
       compiler     -- The compiler instance that is used to load dependencies and compile C/C++ code.
@@ -164,6 +267,7 @@ class Module(object):
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
+        self.MsvcCompiler = _MsvcCompiler
         
         self.link = emk.module("link")
         self.c = emk.Container()
