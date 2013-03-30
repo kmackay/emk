@@ -286,51 +286,11 @@ class _OsxGccLinker(_GccLinker):
         
 class _MingwGccLinker(_GccLinker):
     """
-    A subclass of GccLinker for linking on 32-bit Windows.
+    A subclass of GccLinker for linking on Windows.
     """
     def __init__(self, path_prefix=""):
         super(_MingwGccLinker, self).__init__(path_prefix)
-        self.main_nm_regex = re.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)
-
-    def shlib_opts(self):
-        """
-        Returns a list of options that the link module should use when linking a shared library.
-        """
-        opts = super(_MingwGccLinker, self).shlib_opts()
-        opts.extend(["-m32"])
-        return opts
-    
-    def exe_opts(self):
-        """
-        Returns a list of options that the link module should use when linking an executable.
-        """
-        opts = super(_MingwGccLinker, self).exe_opts()
-        opts.extend(["-m32"])
-        return opts
-
-class _Mingw64GccLinker(_GccLinker):
-    """
-    A subclass of GccLinker for linking on 64-bit Windows.
-    """
-    def __init__(self, path_prefix=""):
-        super(_Mingw64GccLinker, self).__init__(path_prefix)
-        self.main_nm_regex = re.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)
-
-    def shlib_opts(self):
-        """
-        Returns a list of options that the link module should use when linking a shared library.
-        """
-        opts = super(_Mingw64GccLinker, self).shlib_opts()
-        opts.extend(["-m64"])
-        return opts
-    
-    def exe_opts(self):
-        """
-        Returns a list of options that the link module should use when linking an executable.
-        """
-        opts = super(_Mingw64GccLinker, self).exe_opts()
-        opts.extend(["-m64"])
-        return opts
+        self.main_nm_regex = re.compile(r'\s+T\s+_?((t|w)?main|WinMain(@[0-9]+)?)\s*$', re.MULTILINE)
 
 link_cache = {}
 need_depdirs = {}
@@ -373,8 +333,9 @@ class Module(object):
     (note that the 'exe_ext' property is "" by default).
     
     Classes:
-      GccLinker    -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
-      OsxGccLinker -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
+      GccLinker      -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
+      OsxGccLinker   -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
+      MingwGccLinker -- A linker class that uses gcc/g++ to link on Windows, and uses ar to create static libraries.
     
     Properties (inherited from parent scope):
       comments_regex      -- The regex to use to match (and ignore) comments when using "simple" main() detection.
@@ -455,7 +416,6 @@ class Module(object):
         self.GccLinker = _GccLinker
         self.OsxGccLinker = _OsxGccLinker
         self.MingwGccLinker = _MingwGccLinker
-        self.Mingw64GccLinker = _Mingw64GccLinker
         
         self._all_depdirs = set()
         self._depended_by = set()
@@ -517,20 +477,16 @@ class Module(object):
             self.exe_ext = ""
             self.lib_prefix = "lib"
             
-            bits = struct.calcsize("P") * 8
             if sys.platform == "darwin":
                 self.linker = self.OsxGccLinker()
                 self.shared_lib_ext = ".dylib"
             elif sys.platform == "win32":
-                if bits == 64:
-                    self.linker = self.Mingw64GccLinker()
-                else:
-                    self.linker = self.MingwGccLinker()
+                self.linker = self.MingwGccLinker()
                 self.shared_lib_ext = ".dll"
                 self.static_lib_ext = ".lib"
                 self.exe_ext = ".exe"
                 self.lib_prefix = ""
-                self.main_function_regex = re.compile(r'(int\s+main\s*\()|(WinMain\s*\()')
+                self.main_function_regex = re.compile(r'(int\s+_?(t|w)?main\s*\()|(WinMain\s*\()')
             else:
                 self.linker = self.GccLinker()
                 self.shared_lib_ext = ".so"

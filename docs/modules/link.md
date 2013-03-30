@@ -66,6 +66,8 @@ Properties (defaults set based on the path prefix passed to the constructor):
  * **lipo_path**: The path of the 'lipo' executable.
  * **libtool_path**: The path of the 'libtool' executable.
 
+**MingwGccLinker**: A linker class for linking using gcc/g++ on Windows; inherits from GccLinker.
+
 Properties
 ----------
 All properties are inherited from the parent scope if there is one.
@@ -74,7 +76,7 @@ All properties are inherited from the parent scope if there is one.
  * **main_function_regex**: The regex to use to detect a main() function when using "simple" main() detection.
   
  * **linker**: The linker instance used to link executables / shared libraries, and to create static libraries.
-               This is set to link.GccLinker() by default on Linux or Windows, and link.OsxGccLinker() by default on OS X.
+               This is set to link.GccLinker() by default on Linux, link.MingwGccLinker() by default on Windows, and link.OsxGccLinker() by default on OS X.
  * **shared_lib_ext**: The extension to use for shared libraries. The default is ".so" on Linux, ".dll" on Windows, and
                        ".dylib" on OS X.
  * **static_lib_ext**: The extension for static libraries. Set to ".a" by default.
