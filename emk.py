@@ -493,7 +493,6 @@ class _WindowsOutputHandler(logging.StreamHandler):
     def _output(self, string):
         _handle = self._handle
         stream = self.stream
-        styles = self.styles
         r = self.r
         start = 0
         current_style = self._default_style
@@ -720,10 +719,7 @@ class EMK_Base(object):
         
         stylers = {"no":_NoStyler, "console":_ConsoleStyler, "html":_HtmlStyler, "passthrough":_PassthroughStyler}
         
-        if sys.platform == "win32":
-            self._options["style"] = "no"
-        else:
-            self._options["style"] = "console"
+        self._options["style"] = "console"
         
         self.traces = set()
         self._trace_unchanged = False

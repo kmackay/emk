@@ -158,7 +158,7 @@ class _MsvcCompiler(object):
 
         stdout, stderr, returncode = utils.call(args, env=self._env, noexit=True, print_stdout=False, print_stderr=False)
         if returncode != 0:
-            log.info(emk.style_tag('stdout') + stdout + emk.end_style(), extra={'adorn':False})
+            log.info(emk.style_tag('stderr') + stdout + emk.end_style(), extra={'adorn':False})
             stack = emk.fix_stack(traceback.extract_stack())
             if emk.options["log"] == "debug" and emk.current_rule:
                 stack.append("Rule definition:")
