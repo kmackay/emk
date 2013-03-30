@@ -15,6 +15,7 @@ All of the tutorial code is available in the emk repository, in the `tutorial` d
 
 In any tutorial section, once the code is built, you should try modifying various files and rebuilding to see what emk does.
 
+<a id="h1" name="h1"></a>
 1. Basics
 ---------
 
@@ -29,6 +30,13 @@ Create the `emk_rules.py` file in that directory. Here are the contents:
 ```python
 emk.module("c")
 ```
+
+> **Note:** For Visual Studio users, you should use the following instead to override the default (GCC) compiler and linker with the MSVC tools:
+> ```python
+> c, link = emk.module("c", "link")
+> c.compiler = c.MsvcCompiler()
+> link.linker = link.MsvcLinker()
+> ```
 
 This sets up emk to automatically detect and build C and C++ source files, and link them into static libraries or executables (depending on
 whether or not the source file defines a `main()` function).
@@ -79,6 +87,7 @@ xxxx:1_basics kmackay$ __build__/print
 In the emk tutorial, part 1
 ```
 
+<a id="h2" name="h2"></a>
 2. Java
 -------
 
@@ -130,6 +139,7 @@ xxxx:2_java kmackay$ java -jar __build__/print.jar
 In the emk tutorial, part 2
 ```
 
+<a id="h3" name="h3"></a>
 3. Project
 ----------
 
@@ -148,6 +158,17 @@ c = emk.module("c")
 c.include_dirs.append("$:proj:$")
 c.defines["DEFINED_VALUE"] = 10
 ```
+
+> **Note:** For Visual Studio users, you should use the following instead to override the default (GCC) compiler and linker with the MSVC tools:
+> ```python
+> c, link = emk.module("c", "link")
+> c.compiler = c.MsvcCompiler()
+> link.linker = link.MsvcLinker()
+> 
+> c.include_dirs.append("$:proj:$")
+> c.defines["DEFINED_VALUE"] = 10
+> ```
+
 This sets the project directory for emk in any subdirectories to the current directory. The project directory is available via the `emk.proj_dir` property,
 or you can use the `$:proj:$` placeholder in strings passed to emk. We add the project directory as an include directory for the c module; this allows C code
 to #include headers relative to the project directory rather than relative to the directory the C code is in.
@@ -276,6 +297,7 @@ In the emk tutorial, part 3. The defined value in test.c is 10
 You can see that the DEFINED_VALUE was 10 in `test.c` (inherited from `emk_project.py`), but in `printing.c`, the value was 999 since we overrode the value in
 the `emk_rules.py` file for that directory.
 
+<a id="h4" name="h4"></a>
 4. Rules
 --------
 
@@ -346,6 +368,8 @@ emk.depend("$:build:$/revision.o", "revision.h")
 utils.clean_rule("revision.h")
 ```
 
+> **Note:** For Visual Studio users, you should set up the compiler and linker similarly to tutorials [1](#h1) and [3](#h3) above.
+
 First, we import the `os` Python module since we use it later. Then we load the `c` and `utils` emk modules.
 
 We then define the `get_git_revision`, `get_git_branch`, and `get_git_url` functions to get imformation about the git repository; these use the `utils.call` method
@@ -398,6 +422,7 @@ xxxx:4_rules kmackay$ __build__/revision
 In the emk tutorial, part 4: Revision b2cf3e6 (master) from ssh://git@github.com/kmackay/emk.git
 ```
 
+<a id="h5" name="h5"></a>
 5. Modules
 ----------
 
@@ -515,6 +540,8 @@ emk.module_paths.append(emk.abspath("modules"))
 c, revision = emk.module("c", "revision")
 emk.depend("$:build:$/revision.o", "revision.h")
 ```
+
+> **Note:** For Visual Studio users, you should set up the compiler and linker similarly to tutorials [1](#h1) and [3](#h3) above.
 
 First we tell emk that it can also load modules from the `modules` directory. We then load the builtin `c` module and the `revision` module that we just created.
 Then we add the dependency on `revision.h` to the object file as before.

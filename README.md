@@ -4,7 +4,7 @@ emk
 A Python-based build tool.
 
 Requires Python 2.6 or higher; Python 3+ is supported. Currently supports OS X, Linux, and Windows.
-Compiling and linking module support is provided for gcc/g++.
+Compiling and linking module support is provided for gcc/g++ and MSVC.
 
 Features
 --------
