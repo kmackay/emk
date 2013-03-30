@@ -351,6 +351,7 @@ class _ConsoleStyler(object):
             "important":"\033[1m\033[31m", "rule_stack":"\033[34m", "stderr":"\033[31m"}
         
     def style(self, string, record):
+        r = self.r
         styles = self.styles.copy()
         if record.levelno >= logging.WARNING:
             styles["logtype"] = "\033[1m"
@@ -361,7 +362,7 @@ class _ConsoleStyler(object):
         bits = []
         if record.levelno == logging.DEBUG:
             bits.append("\033[34m")
-        m = self.r.search(string, start)
+        m = r.search(string, start)
         while m:
             bits.append(string[start:m.start(0)])
             style = styles.get(m.group(1))
@@ -377,7 +378,7 @@ class _ConsoleStyler(object):
                 stack.append('')
             
             start = m.end(0)
-            m = self.r.search(string, start)
+            m = r.search(string, start)
         bits.append(string[start:])
         bits.append("\033[0m")
         return ''.join(bits)
@@ -447,6 +448,78 @@ class _Formatter(logging.Formatter):
             return self.styler.style(_style_tag('__start__') + record.message + _style_tag('__end__'), record)
         
         return self.styler.style(_style_tag('__start__') + (self.format_str % (record.__dict__)) + _style_tag('__end__'), record)
+
+class _WindowsOutputHandler(logging.StreamHandler):
+    def __init__(self, stream=None):
+        super(_WindowsOutputHandler, self).__init__(stream)
+
+        self._windows_color_map = {
+            0: 0x00, # black
+            1: 0x04, # red
+            2: 0x02, # green
+            3: 0x06, # yellow
+            4: 0x01, # blue
+            5: 0x05, # magenta
+            6: 0x03, # cyan
+            7: 0x07, # white
+            }
+            
+        self._handle = None
+        import ctypes
+        
+        try:
+            fd = stream.fileno()
+            if fd in (1, 2): # stdout or stderr
+                self._handle = ctypes.windll.kernel32.GetStdHandle(-10 - fd)
+                self.set_text_attr = ctypes.windll.kernel32.SetConsoleTextAttribute
+        except IOError:
+            pass
+
+        self.r = re.compile("\033\[([0-9]+)m")
+        self._default_style = 0x07
+        
+    def _get_style(self, current_style, ansi_code):
+        if ansi_code == 0:
+            return self._default_style
+        elif ansi_code == 1:
+            return current_style | 0x08
+        elif 30 <= ansi_code <= 37:
+            return (current_style & ~0x07) | self._windows_color_map[ansi_code - 30]
+        elif 40 <= ansi_code <= 47:
+            return (current_style & ~0x70) | (self._windows_color_map[ansi_code - 40] << 4)
+        else:
+            return current_style
+
+    def _output(self, string):
+        _handle = self._handle
+        stream = self.stream
+        styles = self.styles
+        r = self.r
+        start = 0
+        current_style = self._default_style
+        m = r.search(string, start)
+        while m:
+            stream.write(string[start:m.start(0)])
+            
+            code = int(m.group(1))
+            current_style = self._get_style(current_style, code)
+            if _handle:
+                self.set_text_attr(_handle, current_style)
+
+            start = m.end(0)
+            m = r.search(string, start)
+        stream.write(string[start:])
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self._output(msg)
+            self.stream.write('\n')
+            self.flush()
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except:
+            self.handleError(record)
 
 def _find_project_dir(path):
     dir = path
@@ -575,7 +648,10 @@ class EMK_Base(object):
         self._flatten_gen = _flatten_gen
         
         self.log = logging.getLogger("emk")
-        handler = logging.StreamHandler(sys.stdout)
+        if sys.platform == "win32":
+            handler = _WindowsOutputHandler(sys.stdout)
+        else:
+            handler = logging.StreamHandler(sys.stdout)
         self.formatter = _Formatter("%(name)s (%(levelname)s): %(message)s")
         handler.setFormatter(self.formatter)
         self.log.addHandler(handler)
@@ -680,7 +756,7 @@ class EMK_Base(object):
                             self._build_threads = val
                     elif key == "style":
                         if val not in stylers:
-                            self.log.error("Unknown log style option '%s'", level)
+                            self.log.error("Unknown log style option '%s'", val)
                             val = "no"
                     elif key == "trace":
                         self.traces = set(val.split(','))
@@ -2548,12 +2624,15 @@ def main(args):
       trace_unchanged -- If set to "yes", the tracer will trace through targets
                          that were not modified as well. The default value is "no".
     """
+    emk = None
     try:
-        setup(args).run(os.getcwd())
+        emk = setup(args)
+        emk.run(os.getcwd())
         return 0
     except KeyboardInterrupt:
-        emk.log.error("\nemk: Interrupted", extra={'adorn':False})
-        emk._print_bad_rules()
+        if emk:
+            emk.log.error("\nemk: Interrupted", extra={'adorn':False})
+            emk._print_bad_rules()
         return 1
     except _BuildError as e:
         lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
@@ -2563,4 +2642,5 @@ def main(args):
         emk._print_bad_rules()
         return 1
     finally:
-        emk._print_traces()
+        if emk:
+            emk._print_traces()

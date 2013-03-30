@@ -3,13 +3,15 @@ emk
 
 A Python-based build tool.
 
-Requires Python 2.6 or higher; Python 3+ is supported. Currently supports OS X and Linux, with Windows support planned.
+Requires Python 2.6 or higher; Python 3+ is supported. Currently supports OS X, Linux, and Windows.
+Compiling and linking module support is provided for gcc/g++.
 
 Features
 --------
 
  * Fast builds. emk is designed to use multiple threads, and uses as many threads as you have processors
    by default. Build time scales linearly with the number of executed build rules.
+ * No installation required.
  * Designed for correct recursive builds (ie, building in multiple directories that are dependent on
    each other). Note that emk only uses a single process for recursive builds; it does not spawn a new
    process for each directory. This allows a global view of the build graph so that correctness is easy.
@@ -23,16 +25,16 @@ Features
    source code.
  * Hierarchical build configuration system, so you can configure build settings (such as compiler flags)
    for a given project or directory easily.
- * Fancy output formatting system - can output plain text, colored/styled console output (using ANSI escape codes),
+ * Fancy output formatting system - can output plain text, coloured/styled console output (using ANSI escape codes),
    or HTML (suitable for CSS styling).
 
 Installation
 ------------
 
 If desired, you can run `(sudo) setup.py install` to create a symlink at /usr/bin/emk pointing to
-the emk script in the current directory on *nix platforms or add it to the PATH on Windows. You
+the emk script in the current directory (on *nix platforms) or add it to the PATH (on Windows). You
 can run `(sudo) setup.py uninstall` to remove /usr/bin/emk if it is a symlink to the emk script in
-the current directory on *nix platforms, or to remove it from the PATH on Windows.
+the current directory (on *nix platforms), or to remove it from the PATH (on Windows).
 
 Note that emk does not require installation; it can be run directly from any directory. The only requirement
 is that the emk script and the emk.py module must be in the same directory. Typically that directory
