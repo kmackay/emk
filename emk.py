@@ -680,7 +680,7 @@ class EMK_Base(object):
                             self._build_threads = val
                     elif key == "style":
                         if val not in stylers:
-                            self.log.error("Unknown log style option '%s'", level)
+                            self.log.error("Unknown log style option '%s'", val)
                             val = "no"
                     elif key == "trace":
                         self.traces = set(val.split(','))
@@ -2548,12 +2548,15 @@ def main(args):
       trace_unchanged -- If set to "yes", the tracer will trace through targets
                          that were not modified as well. The default value is "no".
     """
+    emk = None
     try:
-        setup(args).run(os.getcwd())
+        emk = setup(args)
+        emk.run(os.getcwd())
         return 0
     except KeyboardInterrupt:
-        emk.log.error("\nemk: Interrupted", extra={'adorn':False})
-        emk._print_bad_rules()
+        if emk:
+            emk.log.error("\nemk: Interrupted", extra={'adorn':False})
+            emk._print_bad_rules()
         return 1
     except _BuildError as e:
         lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
@@ -2563,4 +2566,5 @@ def main(args):
         emk._print_bad_rules()
         return 1
     finally:
-        emk._print_traces()
+        if emk:
+            emk._print_traces()
