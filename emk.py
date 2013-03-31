@@ -1253,13 +1253,8 @@ class EMK_Base(object):
                 thread.join()
         
         if self._buildable_rules.errors:
-            lines = []
-            for error in self._buildable_rules.errors:
-                lines.append("%s" % (error))
-                if error.extra_info:
-                    lines.extend(error.extra_info)
-                lines.append("")
-            raise _BuildError("At least one rule failed to build", lines)
+            # For now, we just raise the first error
+            raise self._buildable_rules.errors[0]
 
         self._building = False
     
@@ -1605,7 +1600,7 @@ class EMK_Base(object):
                 lines.append("Rule definition:")
                 lines.extend(["    " + _style_tag('rule_stack') + line + _style_tag('') for line in rule.stack])
             lines.append(_style_tag('important') + "You should clean before rebuilding." + _style_tag(''))
-            self.log.error('\n'.join(lines), extra={'adorn':False})
+            self.log.error('\n' + '\n'.join(lines), extra={'adorn':False})
     
     def _trace_changed_str(self, s):
         if self._options["style"] == "no":
@@ -2631,7 +2626,7 @@ def main(args):
             emk._print_bad_rules()
         return 1
     except _BuildError as e:
-        lines = [_style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
+        lines = ['\n' + _style_tag('important') + "Build error:" + _style_tag('') + " %s" % (e)]
         if e.extra_info:
             lines.extend(["    " + line.replace('\n', "\n    ") for line in e.extra_info])
         emk.log.error('\n'.join(lines), extra={'adorn':False})

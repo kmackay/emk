@@ -209,10 +209,17 @@ class Module(object):
         if strings:
             log.info('\n'.join(strings), extra={'adorn':False})
         if exit_on_nonzero_return and proc.returncode != 0:
-            stack = emk.fix_stack(traceback.extract_stack()[:-1])
+            stack = []
+            if error_stream == "stdout" or error_stream == "both":
+                stack.append(stdout_tag + proc_stdout + emk.end_style())
+            if error_stream == "stderr" or error_stream == "both":
+                stack.append(stderr_tag + proc_stderr + emk.end_style())
+            if emk.options["log"] == "debug":
+                stack.append("Call stack:")
+                stack += emk.fix_stack(traceback.extract_stack()[:-1])
             if emk.options["log"] == "debug" and emk.current_rule:
                 stack.append("Rule definition:")
-                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+                stack.extend([emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
             raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), proc.returncode), stack)
         return (proc_stdout, proc_stderr, proc.returncode)
 
