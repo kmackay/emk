@@ -158,6 +158,8 @@ class Module(object):
           print_stderr -- If True, the stderr of the subprocess will be logged (after the subprocess exits). If "nonzero",
                           the subprocess stderr will be logged only if the subprocess exits abnormally (with a nonzero exit code).
                           If False, the subprocess stderr will not be logged. The default value is "nonzero".
+          error_stream -- Controls which output stream is logged as an error. Can be set to "none", "stdout", "stderr", or "both".
+                          The default value is "stderr".
                           
         Returns a tuple (stdout, stderr, exit code).
         """
@@ -165,6 +167,7 @@ class Module(object):
         print_call = True
         print_stdout = False
         print_stderr = "nonzero"
+        error_stream = "stderr"
         exit_on_nonzero_return = True
         cwd = None
         env = None
@@ -175,12 +178,22 @@ class Module(object):
             print_stdout = True
         if "print_stderr" in kwargs:
             print_stderr = kwargs["print_stderr"]
+        if "error_stream" in kwargs:
+            error_stream = kwargs["error_stream"]
         if "noexit" in kwargs and kwargs["noexit"]:
             exit_on_nonzero_return = False
         if "cwd" in kwargs:
             cwd = kwargs["cwd"]
         if "env" in kwargs:
             env = kwargs["env"]
+        
+        stdout_tag = emk.style_tag('stdout')
+        if error_stream == "stdout" or error_stream == "both":
+            stdout_tag = emk.style_tag('stderr')
+        
+        stderr_tag = emk.style_tag('stdout')
+        if error_stream == "stderr" or error_stream == "both":
+            stderr_tag = emk.style_tag('stderr')
 
         proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
         proc_stdout, proc_stderr = proc.communicate()
@@ -189,10 +202,10 @@ class Module(object):
             strings.append(' '.join(args))
         if print_stdout and proc_stdout:
             strings.append(emk.style_tag('u') + "Subprocess stdout:" + emk.end_style())
-            strings.append(emk.style_tag('stdout') + proc_stdout + emk.end_style())
+            strings.append(stdout_tag + proc_stdout + emk.end_style())
         if (print_stderr == True or (print_stderr == "nonzero" and proc.returncode != 0)) and proc_stderr:
             strings.append(emk.style_tag('u') + "Subprocess stderr:" + emk.end_style())
-            strings.append(emk.style_tag('stderr') + proc_stderr + emk.end_style())
+            strings.append(stderr_tag + proc_stderr + emk.end_style())
         if strings:
             log.info('\n'.join(strings), extra={'adorn':False})
         if exit_on_nonzero_return and proc.returncode != 0:

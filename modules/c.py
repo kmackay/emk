@@ -162,14 +162,7 @@ class _MsvcCompiler(object):
         args.extend(utils.flatten(flags))
         args.extend(['/Fo%s' % dest, source])
 
-        stdout, stderr, returncode = utils.call(args, env=self._env, noexit=True, print_stdout=False, print_stderr=False)
-        if returncode != 0:
-            log.info(emk.style_tag('stderr') + stdout + emk.end_style(), extra={'adorn':False})
-            stack = emk.fix_stack(traceback.extract_stack())
-            if emk.options["log"] == "debug" and emk.current_rule:
-                stack.append("Rule definition:")
-                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
-            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+        utils.call(args, env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")
 
         items = []
         for l in stdout.split('\n'):

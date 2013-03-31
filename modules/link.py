@@ -35,9 +35,7 @@ class _GccLinker(object):
       nm_path    -- The path of the nm tool to read the symbol table from an object file (eg "nm").
       
       main_nm_regex -- The compiled regex to use to search for a main() function in the nm output. The default value
-                       looks for a line ending in " T main". For mingw64 building for 64-bit, you probably want something
-                       like 're.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)'. For mingw64 building for 32-bit, you
-                       want something like 're.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)'.
+                       looks for a line ending in " T main".
     """
     def __init__(self, path_prefix=""):
         """
@@ -301,17 +299,6 @@ class _MingwGccLinker(_GccLinker):
 class _MsvcLinker(object):
     """
     Linker class for using Visual Studio's command line tools to link.
-    
-    In order for the emk link module to use a linker instance, the linker class must define the following methods:
-      contains_main_function
-      create_static_lib
-      static_lib_cwd_safe
-      shlib_opts
-      exe_opts
-      do_link
-      link_cwd_safe
-      strip
-    See the documentation for those functions in this class for more details.
     """
     @staticmethod
     def vs_env(path_prefix, env_script):
@@ -389,14 +376,7 @@ class _MsvcLinker(object):
           dest  -- The path to the static library.
           files -- A list of paths to files to add to the static library.
         """
-        stdout, stderr, returncode = utils.call(self.lib_exe, "/NOLOGO", '/OUT:%s' % dest, files, env=self._env, noexit=True, print_stdout=True, print_stderr=False)
-        if returncode != 0:
-            log.info(emk.style_tag('stderr') + stdout + emk.end_style(), extra={'adorn':False})
-            stack = emk.fix_stack(traceback.extract_stack())
-            if emk.options["log"] == "debug" and emk.current_rule:
-                stack.append("Rule definition:")
-                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
-            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+        utils.call(self.lib_exe, "/NOLOGO", '/OUT:%s' % dest, files, env=self._env, print_stdout=True, print_stderr=False, error_stream="stdout")
 
     def create_static_lib(self, dest, source_objs, other_libs):
         """
@@ -454,14 +434,8 @@ class _MsvcLinker(object):
         flat_flags = utils.flatten(flags)
         lib_dir_flags = ['/LIBPATH:"%s"' % d for d in lib_dirs]
 
-        stdout, stderr, returncode = utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs, env=self._env, noexit=True, print_stdout=True, print_stderr=False)
-        if returncode != 0:
-            log.info(emk.style_tag('stderr') + stdout + emk.end_style(), extra={'adorn':False})
-            stack = emk.fix_stack(traceback.extract_stack())
-            if emk.options["log"] == "debug" and emk.current_rule:
-                stack.append("Rule definition:")
-                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
-            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+        utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs,
+            env=self._env, print_stdout=True, print_stderr=False, error_stream="stdout")
     
     def link_cwd_safe(self):
         """

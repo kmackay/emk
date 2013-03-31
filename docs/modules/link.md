@@ -46,7 +46,7 @@ For an object file &lt;name>.o that is being linked into an executable, the gene
 
 Classes
 -------
-**GccLinker**: A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
+#### **GccLinker**: A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
 
 Properties (defaults set based on the path prefix passed to the constructor):
  * **c_path**: The path of the C linker (eg "gcc").
@@ -54,27 +54,23 @@ Properties (defaults set based on the path prefix passed to the constructor):
  * **ar_path**: The path of the archive tool to create static libs (eg "ar").
  * **strip_path**: The path of the strip tool to remove unnecessary symbols (eg "strip").
  * **nm_path**: The path of the nm tool to read the symbol table from an object file (eg "nm").
-
  * **main_nm_regex**: The compiled regex to use to search for a main() function in the nm output. The default value
-                      looks for a line ending in " T main". For mingw64 building for 64-bit, you probably want something
-                      like 're.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)'. For mingw64 building for 32-bit, you
-                      want something like 're.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)'.
+                      looks for a line ending in " T main".
  
-**OsxGccLinker**: A linker class for linking using gcc/g++ on OS X; inherits from GccLinker. Uses libtool to create static libraries for multi-arch support.
+#### **OsxGccLinker**: A linker class for linking using gcc/g++ on OS X; inherits from GccLinker. Uses libtool to create static libraries for multi-arch support.
 
 Properties (defaults set based on the path prefix passed to the constructor):
  * **lipo_path**: The path of the 'lipo' executable.
  * **libtool_path**: The path of the 'libtool' executable.
 
-**MingwGccLinker**: A linker class for linking using gcc/g++ on Windows; inherits from GccLinker.
+#### **MingwGccLinker**: A linker class for linking using gcc/g++ on Windows; inherits from GccLinker.
 
-**MsvcLinker**: A linker class for linking using Microsoft's Visual C++ tools on Windows.
+#### **MsvcLinker**: A linker class for linking using Microsoft's Visual C++ tools on Windows.
 
 Properties (defaults set based on the path prefix passed to the constructor):
  * **dumpbin_exe**: The absolute path to the dumpbin executable.
  * **lib_exe**: The absolute path to the lib executable.
  * **link_exe**: The absolute path to the link executable.
-
  * **main_dumpbin_regex**: The compiled regex to use to search for a main() function in the dumpbin output.
 
 Properties

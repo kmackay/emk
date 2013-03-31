@@ -84,6 +84,8 @@ Keyword arguments:
  * **print_stderr**: If True, the stderr of the subprocess will be logged (after the subprocess exits). If "nonzero",
                      the subprocess stderr will be logged only if the subprocess exits abnormally (with a nonzero exit code).
                      If False, the subprocess stderr will not be logged. The default value is "nonzero".
+ * **error_stream**: Controls which output stream is logged as an error. Can be set to "none", "stdout", "stderr", or "both".
+			         The default value is "stderr".
 
 #### `utils.mark_virtual_rule(produces, requires)`
 Define an emk rule to mark the productions as virtual.
