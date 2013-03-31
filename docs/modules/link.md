@@ -66,6 +66,17 @@ Properties (defaults set based on the path prefix passed to the constructor):
  * **lipo_path**: The path of the 'lipo' executable.
  * **libtool_path**: The path of the 'libtool' executable.
 
+**MingwGccLinker**: A linker class for linking using gcc/g++ on Windows; inherits from GccLinker.
+
+**MsvcLinker**: A linker class for linking using Microsoft's Visual C++ tools on Windows.
+
+Properties (defaults set based on the path prefix passed to the constructor):
+ * **dumpbin_exe**: The absolute path to the dumpbin executable.
+ * **lib_exe**: The absolute path to the lib executable.
+ * **link_exe**: The absolute path to the link executable.
+
+ * **main_dumpbin_regex**: The compiled regex to use to search for a main() function in the dumpbin output.
+
 Properties
 ----------
 All properties are inherited from the parent scope if there is one.
@@ -74,12 +85,14 @@ All properties are inherited from the parent scope if there is one.
  * **main_function_regex**: The regex to use to detect a main() function when using "simple" main() detection.
   
  * **linker**: The linker instance used to link executables / shared libraries, and to create static libraries.
-               This is set to link.GccLinker() by default on Linux or Windows, and link.OsxGccLinker() by default on OS X.
+               This is set to link.GccLinker() by default on Linux, link.MingwGccLinker() by default on Windows, and link.OsxGccLinker() by default on OS X.
  * **shared_lib_ext**: The extension to use for shared libraries. The default is ".so" on Linux, ".dll" on Windows, and
                        ".dylib" on OS X.
  * **static_lib_ext**: The extension for static libraries. Set to ".a" by default.
  * **exe_ext**: The extension to use for exectuables. Set to "" (empty string) by default.
  * **lib_prefix**: The prefix to use for static/shared libraries. Set to "lib" by default.
+ * **obj_ext**: The file extension for object files processed by the linker (eg ".o" for gcc or ".obj" for MSVC).  This property is
+                read-only as its value is provided by the linker implementation.
   
  * **shared_libname**: The name to use for the generated shared library (if any). If set to None, the library name will
                        be &lt;lib_prefix>&lt;current directory name>&lt;shared_lib_ext>. The default value is None.
@@ -205,3 +218,6 @@ if its `strip` property is True.
 
 Arguments:
  * **path**: The path of the file to strip.
+
+#### `obj_ext(self)`
+This function will be called to get the extension of object files consumed by this linker.

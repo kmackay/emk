@@ -2,8 +2,8 @@ import os
 import logging
 import shlex
 import re
-import struct
 import sys
+import traceback
 
 log = logging.getLogger("emk.c")
 
@@ -109,33 +109,118 @@ class _GccCompiler(object):
         """
         self.compile(self.cxx_path, source, dest, includes, defines, flags)
 
-class _MingwGccCompiler(_GccCompiler):
-    """
-    Compiler class for using gcc/g++ to compile C/C++ respectively on 32-bit Windows.
-    """
-    def compile_c(self, source, dest, includes, defines, flags):
-        if "-m32" not in flags:
-            flags.extend(["-m32"])
-        self.compile(self.c_path, source, dest, includes, defines, flags)
-    
-    def compile_cxx(self, source, dest, includes, defines, flags):
-        if "-m32" not in flags:
-            flags.extend(["-m32"])
-        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+    def obj_ext(self):
+        """
+        Get the extension of object files built by this compiler.
+        """
+        return ".o"
 
-class _Mingw64GccCompiler(_GccCompiler):
+class _MsvcCompiler(object):
     """
-    Compiler class for using gcc/g++ to compile C/C++ respectively on 64-bit Windows.
+    Compiler class for using Microsoft's Visual C++ to compile C/C++.
+    
+    In order for the emk c module to use a compiler instance, the compiler class must define the following methods:
+      load_extra_dependencies
+      compile_c
+      compile_cxx
+    See the documentation for those functions in this class for more details.
     """
+    def __init__(self, path_prefix=None, env_script="vcvarsall.bat"):
+        """
+        Create a new MsvcCompiler instance.
+        
+        Arguments:
+          path_prefix -- The prefix to use for the vcvarsall.bat file. The default value is derived from the VS*COMNTOOLS environment variable.
+
+        Properties:
+          cl_exe -- The absolute path to the cl executable.
+        """
+        from link import _MsvcLinker
+        
+        self._env = _MsvcLinker.vs_env(path_prefix, env_script)
+        self._dep_re = re.compile(r'Note:\s+including file:\s+([^\s].*)\s*')
+
+        self.cl_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "cl.exe")
+
+    def load_extra_dependencies(self, path):
+        """
+        Load extra dependencies for the given object file path. The extra dependencies could be loaded from a generated
+        dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
+        
+        Arguments:
+          path -- The path of the object file to get dependencies for.
+        
+        Returns a list of paths (strings) of all the extra dependencies.
+        """
+        cache = emk.scope_cache(path)
+        return cache.get("secondary_deps", [])
+    
+    def compile(self, source, dest, includes, defines, flags):
+        args = [self.cl_exe, "/nologo", "/c", "/showIncludes"]
+        args.extend(['/I%s' % (emk.abspath(d)) for d in includes])
+        args.extend(['/D%s=%s' % (key, value) for key, value in defines.items()])
+        args.extend(utils.flatten(flags))
+        args.extend(['/Fo%s' % dest, source])
+
+        stdout, stderr, returncode = utils.call(args, env=self._env, noexit=True, print_stdout=False, print_stderr=False)
+        if returncode != 0:
+            log.info(emk.style_tag('stderr') + stdout + emk.end_style(), extra={'adorn':False})
+            stack = emk.fix_stack(traceback.extract_stack())
+            if emk.options["log"] == "debug" and emk.current_rule:
+                stack.append("Rule definition:")
+                stack.extend(["    " + emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+            raise emk.BuildError("In directory %s:\nSubprocess '%s' returned %s" % (emk.scope_dir, ' '.join(args), returncode), stack)
+
+        items = []
+        for l in stdout.split('\n'):
+            m = self._dep_re.match(l)
+            if m:
+                items.append(m.group(1))
+        unique_items = utils.unique_list(items)
+
+        # call has_changed to set up rule cache for future builds.
+        for item in unique_items:
+            emk.current_rule.has_changed(item)
+        cache = emk.scope_cache(dest)
+        cache["secondary_deps"] = unique_items
+
     def compile_c(self, source, dest, includes, defines, flags):
-        if "-m64" not in flags:
-            flags.extend(["-m64"])
-        self.compile(self.c_path, source, dest, includes, defines, flags)
+        """
+        Compile a C source file into an object file.
+        
+        Arguments:
+          source   -- The C source file path to compile.
+          dest     -- The output object file path.
+          includes -- A list of extra include directories.
+          defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
+                      'flattened = utils.flatten(flags)'.
+        """
+        if "/TC" not in flags:
+            flags.extend(["/TC"])
+        self.compile(source, dest, includes, defines, flags)
     
     def compile_cxx(self, source, dest, includes, defines, flags):
-        if "-m64" not in flags:
-            flags.extend(["-m64"])
-        self.compile(self.cxx_path, source, dest, includes, defines, flags)
+        """
+        Compile a C++ source file into an object file.
+        
+        Arguments:
+          source   -- The C++ source file path to compile.
+          dest     -- The output object file path.
+          includes -- A list of extra include directories.
+          defines  -- A dict of <name>: <value> entries to be used as defines; each entry is equivalent to #define <name> <value>.
+          flags    -- A list of additional flags. This list may contain tuples; to flatten the list, you could use the emk utils module:
+                      'flattened = utils.flatten(flags)'.
+        """
+        if "/TP" not in flags:
+            flags.extend(["/TP"])
+        self.compile(source, dest, includes, defines, flags)
+
+    def obj_ext(self):
+        """
+        Get the extension of object files built by this compiler.
+        """
+        return ".obj"
 
 class Module(object):
     """
@@ -156,7 +241,8 @@ class Module(object):
     is responsible for marking the object files as autobuild if desired.
     
     Classes:
-      GccCompiler -- A compiler class that uses gcc/g++ to compile.
+      GccCompiler  -- A compiler class that uses gcc/g++ to compile.
+      MsvcCompiler -- A compiler class that uses MSVC on Windows to compile binaries.
     
     Properties (inherited from parent scope):
       compiler     -- The compiler instance that is used to load dependencies and compile C/C++ code.
@@ -190,11 +276,13 @@ class Module(object):
       unique_names -- If True, the output object files will be named according to the path from the project directory, to avoid
                       naming conflicts when the build directory is not a relative path. The default value is False.
                       If True, the link module's unique_names property will also be set to True.
+
+      obj_ext      -- The file extension for object files generated by the compiler (eg ".o" for gcc or ".obj" for MSVC).  This property is
+                      read-only as its value is provided by the compiler implementation.
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
-        self.MingwGccCompiler = _MingwGccCompiler
-        self.Mingw64GccCompiler = _Mingw64GccCompiler
+        self.MsvcCompiler = _MsvcCompiler
         
         self.link = emk.module("link")
         self.c = emk.Container()
@@ -220,23 +308,16 @@ class Module(object):
             self.cxx.defines = parent.cxx.defines.copy()
             self.cxx.flags = list(parent.cxx.flags)
             self.cxx.source_files = list(parent.cxx.source_files)
-            
+
             self.autodetect = parent.autodetect
             self.autodetect_from_targets = parent.autodetect_from_targets
             self.excludes = list(parent.excludes)
             self.non_lib_src = list(parent.non_lib_src)
             self.non_exe_src = list(parent.non_exe_src)
-            
+
             self.unique_names = parent.unique_names
         else:
-            bits = struct.calcsize("P") * 8
-            if sys.platform == "win32":
-                if bits == 64:
-                    self.compiler = self.Mingw64GccCompiler()
-                else:
-                    self.compiler = self.MingwGccCompiler()
-            else:
-                self.compiler = self.GccCompiler()
+            self.compiler = self.GccCompiler()
             
             self.include_dirs = []
             self.defines = {}
@@ -263,7 +344,11 @@ class Module(object):
             self.non_exe_src = []
             
             self.unique_names = False
-    
+
+    @property
+    def obj_ext(self):
+        return self.compiler.obj_ext()
+
     def new_scope(self, scope):
         return Module(scope, parent=self)
     
@@ -336,7 +421,7 @@ class Module(object):
             self._add_rule(objs, src, cxx_args)
         
         if self.link:
-            self.link.objects.update([(os.path.join(emk.build_dir, obj + ".o"), src) for obj, src in objs.items()])
+            self.link.objects.update([(os.path.join(emk.build_dir, obj + self.obj_ext), src) for obj, src in objs.items()])
             if cxx_sources:
                 self.link.link_cxx = True
     
@@ -355,13 +440,13 @@ class Module(object):
         objs[name] = src
         
         if self.link:
-            objpath = os.path.join(emk.build_dir, name + ".o")
+            objpath = os.path.join(emk.build_dir, name + self.obj_ext)
             if src in self._non_exe_src:
                 self.link.non_exe_objs.append(objpath)
             if src in self._non_lib_src:
                 self.link.non_lib_objs.append(objpath)
         
-        dest = os.path.join(emk.build_dir, name + ".o")
+        dest = os.path.join(emk.build_dir, name + self.obj_ext)
         requires = [src]
         extra_deps = None
         if self.compiler:
@@ -398,4 +483,3 @@ class Module(object):
             utils.rm(produces[0])
             utils.rm(produces[0] + ".dep")
             raise
-        

@@ -86,25 +86,11 @@ def setup_mswin():
     global link
 
     c.compiler = c.GccCompiler("/cross/mingw64/bin/x86_64-w64-mingw32-")
-    link.linker = link.GccLinker("/cross/mingw64/bin/x86_64-w64-mingw32-")
-    # We need to set up the main() symbol regex (for the nm output) since the symbols are different depending on the architecture.
-    # We also need to look for WinMain()
-    if emk.options["arch"] == "x86_64":
-        link.linker.main_nm_regex = re.compile(r'\s+T\s+(main|WinMain)\s*$', re.MULTILINE)
-    else:
-        link.linker.main_nm_regex = re.compile(r'\s+T\s+(_main|_WinMain@[0-9]+)\s*$', re.MULTILINE)
-    # Set up the source-code main() regex to also look for WinMain()
-    link.main_function_regex = re.compile(r'(int\s+main\s*\()|(WinMain\s*\()')
+    link.linker = link.MingwGccLinker("/cross/mingw64/bin/x86_64-w64-mingw32-")
     
-    # Set up some common copmilation flags.
+    # Set up some common compilation flags.
     flags = ["-mthreads", "-mno-ms-bitfields", "-DWINVER=0x0550"]
     c.flags.extend(flags)
-    
-    # Set up the file naming conventions.
-    link.exe_ext = ".exe"
-    link.shared_lib_ext = ".dll"
-    link.static_lib_ext = ".lib"
-    link.lib_prefix = ""
 
     # Set up the arch-specific flags.
     arch_flags = ["-m32"]
