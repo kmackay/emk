@@ -170,7 +170,7 @@ class _GccLinker(object):
         sg = "-Wl,--start-group"
         eg = "-Wl,--end-group"
         call = [cmd] + flags + ["-o", dest] + objs + [sg] + abs_libs + [eg] + lib_dirs + [sg] + libs + [eg]
-        utils.call(call)
+        utils.call(call, print_stderr=False)
 
     def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode):
         """
@@ -435,7 +435,7 @@ class _MsvcLinker(object):
         lib_dir_flags = ['/LIBPATH:"%s"' % d for d in lib_dirs]
 
         utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs,
-            env=self._env, print_stdout=True, print_stderr=False, error_stream="stdout")
+            env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")
     
     def link_cwd_safe(self):
         """

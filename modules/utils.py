@@ -200,6 +200,8 @@ class Module(object):
         strings = []
         if print_call:
             strings.append(' '.join(args))
+        if exit_on_nonzero_return and proc.returncode != 0:
+            strings.append(emk.style_tag('stderr') + "Nonzero return code: %d" % (proc.returncode) + emk.end_style())
         if print_stdout and proc_stdout:
             strings.append(emk.style_tag('u') + "Subprocess stdout:" + emk.end_style())
             strings.append(stdout_tag + proc_stdout + emk.end_style())

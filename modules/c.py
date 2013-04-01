@@ -64,7 +64,7 @@ class _GccCompiler(object):
         args.extend(["-D%s=%s" % (key, value) for key, value in defines.items()])
         args.extend(utils.flatten(flags))
         args.extend(["-o", dest, "-c", source])
-        utils.call(args)
+        utils.call(args, print_stderr=False)
         
         try:
             with open(dep_file, "r") as f:
