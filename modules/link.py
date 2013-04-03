@@ -286,7 +286,7 @@ class _OsxGccLinker(_GccLinker):
         because the OS X linker will search all libraries to resolve symbols, regardless of order.
         """
         call = [cmd] + flags + ["-o", dest] + objs + abs_libs + lib_dirs + libs
-        utils.call(call)
+        utils.call(call, print_stderr=False)
         
 class _MingwGccLinker(_GccLinker):
     """
