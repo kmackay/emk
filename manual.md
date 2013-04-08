@@ -20,14 +20,14 @@ If no explicit targets are specified, emk will build all autobuild targets.
 
 Recognized options:
 
- * **log**: The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"], 
+ * **log**: The log level that emk will use. May be one of \["debug", "info", "warning", "error", "critical"\], 
             although error and critical are probably not useful. The default value is "info".
  * **emk_dev**: If set to "yes", developer mode is turned on. Currently this disables stack filtering so
                 that errors within emk can be debugged. The default value is "no".
  * **threads**: Set the number of threads used by emk for building. May be either a positive number, or "x".
                 If the value is a number, emk will use that many threads for building; if the value is "x",
                 emk will use as many threads as there are cores on the build machine. The default value is "x".
- * **style**: Set the log style mode. May be one of ["no", "console", "html", "passthrough"]. If set to "no",
+ * **style**: Set the log style mode. May be one of \["no", "console", "html", "passthrough"\]. If set to "no",
               log output styling is disabled. If set to "console", ANSI escape codes will be used to color log
               output (not yet supported on Windows). If set to "html", the log output will be marked up with &lt;div>
               and &lt;span> tags that can then be styled using CSS. If set to "passthrough", the style metadata will
@@ -150,7 +150,7 @@ or config files; you can just use emk.&lt;whatever> directly.
    emk.current_rule and emk.rule_cache() are available.
 
 ### Scoped read-only properties (apply only to the current scope):
- * **scope_name**: The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules'].
+ * **scope_name**: The name of the current scope. May be one of \['global', 'project', 'subproj', 'rules'\].
  * **proj_dir**: The absolute path of the project directory for the current scope.
  * **scope_dir**: The absolute path of the directory in which the scope was created
    (eg, the directory from which the emk_&lt;scope name>.py file was loaded).

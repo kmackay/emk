@@ -12,7 +12,7 @@ See the [Manual](manual.html) for full documentation of emk's features.
 First, clone the emk repository in the location of your choice: `git clone https://github.com/kmackay/emk.git`. This will create
 the root emk directory. All of the tutorial code is available in the emk repository, in the `tutorial` directory.
 
-Before starting the tutorial, you should install emk (by running `sudo ./setup.py install` (*nix) or `python setup.py install` (Windows)) in the root
+Before starting the tutorial, you should install emk (by running `sudo ./setup.py install` (\*nix) or `python setup.py install` (Windows)) in the root
 emk directory) so that you can run emk simply by calling `emk` (rather than needing to use an absolute or relative path).
 You also need gcc and binutils installed (or you can use Visual Studio on Windows; see below), and a JDK if you want to run the Java examples.
 

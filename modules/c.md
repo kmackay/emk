@@ -51,13 +51,13 @@ All properties are inherited from the parent scope if there is one.
    pass it as a tuple. Example: ("-isystem", "/path/to/extra/sys/includes"). Duplicate flags will be removed.
  * **source_files**: A list of files that should be included for compilation. Files will be built as C or C++ depending on the file extension.
   
- * **c.exts**: The list of file extensions (suffixes) that will be considered as C code. The default is [".c"].
+ * **c.exts**: The list of file extensions (suffixes) that will be considered as C code. The default is \[".c"\].
  * **c.include_dirs**: A list of additional include directories for C code.
  * **c.defines**: A dict of &lt;name>: &lt;value> defines for C.
  * **c.flags**: A list of flags for C.
  * **c.source_files**: A list of C files that should be included for compilation (will be built as C code).
   
- * **cxx.exts**: The list of file extensions (suffixes) that will be considered as C++ code. The default is [".cpp", ".cxx", ".c++", ".cc"].
+ * **cxx.exts**: The list of file extensions (suffixes) that will be considered as C++ code. The default is \[".cpp", ".cxx", ".c++", ".cc"\].
  * **cxx.include_dirs**: A list of additional include directories for C++ code.
  * **cxx.defines**: A dict of &lt;name>: &lt;value> defines for C++.
  * **cxx.flags**: A list of flags for C++.

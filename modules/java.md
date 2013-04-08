@@ -30,7 +30,7 @@ All properties are inherited from the parent scope if there is one.
   
  * **compile_flags**: Additional flags to pass to the java compiler. If you have a 'flag' that is more than one argument,
    pass it as a tuple. Duplicate flags will be removed.
- * **exts**: A list of file extensions (suffixes) for autodetection of Java source code. The default value is [".java"].
+ * **exts**: A list of file extensions (suffixes) for autodetection of Java source code. The default value is \[".java"].
  * **source_files**: A list of explicitly defined Java source files to compile.
 
  * **autodetect**: If True, the java module will autodetect Java source code to compile based on the file name suffix.
