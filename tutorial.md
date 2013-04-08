@@ -31,8 +31,8 @@ c.compiler = c.MsvcCompiler()
 link.linker = link.MsvcLinker()
 {% endhighlight %}
 
-1. Basics
----------
+1\. Basics
+----------
 
 In this section, we will create a simple C function in one file, and an executable that calls that function. First we create a new directory for this section:
 {% highlight bash %}
@@ -93,8 +93,8 @@ xxxx:1_basics kmackay$ __build__/print
 In the emk tutorial, part 1
 {% endhighlight %}
 
-2. Java
--------
+2\. Java
+--------
 
 In this section, we will do the same thing as in section 1, but for Java. First we create a new directory for this section:
 {% highlight bash %}
@@ -144,8 +144,8 @@ xxxx:2_java kmackay$ java -jar __build__/print.jar
 In the emk tutorial, part 2
 {% endhighlight %}
 
-3. Project
-----------
+3\. Project
+-----------
 
 In this section, we will create a couple of C libraries to show off the transitive linking abilities of emk. We will also create an `emk_project.py` file
 to demonstrate how it can make managing larger projects simpler, and to show off the hierarchical configuration. First we create a new directory for this section:
@@ -291,8 +291,8 @@ In the emk tutorial, part 3. The defined value in test.c is 10
 You can see that the DEFINED_VALUE was 10 in `test.c` (inherited from `emk_project.py`), but in `printing.c`, the value was 999 since we overrode the value in
 the `emk_rules.py` file for that directory.
 
-4. Rules
---------
+4\. Rules
+---------
 
 In this section we will demonstrate the creation of a new emk rule. The rule will generate a header file containing information about the current git revision and URL.
 We will create a test program that depends on that header file; this will show how to add dependencies to a target. First we create a new directory for this section:
@@ -413,8 +413,8 @@ xxxx:4_rules kmackay$ __build__/revision
 In the emk tutorial, part 4: Revision b2cf3e6 (master) from ssh://git@github.com/kmackay/emk.git
 {% endhighlight %}
 
-5. Modules
-----------
+5\. Modules
+-----------
 
 In the previous section, we created some functions to get information about the git repository, and created a rule to generate a header file
 based on that information. However, it would be nice to abstract all of that code out into an emk module; then it would be easily available

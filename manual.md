@@ -57,7 +57,7 @@ emk maintains a per-scope cache (rules scope only) that can be retrieved and mod
 store information between emk invocations (for example, the discovered header file dependencies for a C file). The cache can only be retrieved
 and modified when you are in rules scope.
 
-Loading Sequence
+Loading Sequence<a id="loading-sequence">&zwnj;</a>
 ----------------
 
 The build process in a given directory goes as follows:

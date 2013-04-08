@@ -11,7 +11,7 @@ body {
 	width: 88px;
 	top: 0px;
 	left: 0px;
-	padding: 5px 20px;
+	padding: 10px 20px;
 	background: #eee;
 	border: 1px solid #aaa;
 	margin: 20px 0 0 10px;
@@ -20,11 +20,17 @@ body {
 .menu ul {
 	list-style: none;
 	padding: 0;
+	margin: 0;
 }
 
 .menu ul ul {
 	list-style: none;
 	padding-left: 20px;
+}
+
+.menu .title {
+	font-weight: 600;
+	font-size: 20px;
 }
 
 .menu .heading {
@@ -52,8 +58,14 @@ body {
 
 .floater a.download {
 	border: 1px solid;
+	border-radius: 7px;
 	padding: 0 5px;
 	margin: 0 5px;
+}
+
+.floater a.download:hover {
+	background: #dbe7f9;
+	text-decoration: none;
 }
 
 section {
@@ -123,6 +135,10 @@ section p:last-child {
 a {
 	text-decoration: none;
 	color: #1d65d1;
+}
+
+a:hover {
+	text-decoration: underline;
 }
 
 a:visited {
