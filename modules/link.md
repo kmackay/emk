@@ -60,8 +60,7 @@ Properties (defaults set based on the path prefix passed to the constructor):
  * **ar_path**: The path of the archive tool to create static libs (eg "ar").
  * **strip_path**: The path of the strip tool to remove unnecessary symbols (eg "strip").
  * **nm_path**: The path of the nm tool to read the symbol table from an object file (eg "nm").
- * **main_nm_regex**: The compiled regex to use to search for a main() function in the nm output. The default value
-                      looks for a line ending in " T main".
+ * **main_nm_regex**: The compiled regex to use to search for a main() function in the nm output. The default value looks for a line ending in " T main".
  
 #### **OsxGccLinker**: A linker class for linking using gcc/g++ on OS X; inherits from GccLinker. Uses libtool to create static libraries for multi-arch support.
 
@@ -89,73 +88,71 @@ All properties are inherited from the parent scope if there is one.
  * **main_function_regex**: The regex to use to detect a main() function when using "simple" main() detection.
   
  * **linker**: The linker instance used to link executables / shared libraries, and to create static libraries.
-               This is set to link.GccLinker() by default on Linux, link.MingwGccLinker() by default on Windows, and link.OsxGccLinker() by default on OS X.
+   This is set to link.GccLinker() by default on Linux, link.MingwGccLinker() by default on Windows, and link.OsxGccLinker() by default on OS X.
  * **shared_lib_ext**: The extension to use for shared libraries. The default is ".so" on Linux, ".dll" on Windows, and ".dylib" on OS X.
  * **static_lib_ext**: The extension for static libraries. Set to ".a" by default.
  * **exe_ext**: The extension to use for exectuables. Set to "" (empty string) by default.
  * **lib_prefix**: The prefix to use for static/shared libraries. Set to "lib" by default.
  * **obj_ext**: The file extension for object files processed by the linker (eg ".o" for gcc or ".obj" for MSVC).  This property is
-                read-only as its value is provided by the linker implementation.
+   read-only as its value is provided by the linker implementation.
   
  * **shared_libname**: The name to use for the generated shared library (if any). If set to None, the library name will
-                       be &lt;lib_prefix>&lt;current directory name>&lt;shared_lib_ext>. The default value is None.
+   be &lt;lib_prefix>&lt;current directory name>&lt;shared_lib_ext>. The default value is None.
  * **static_libname**: The name to use for the generated lib_in_lib static library (if any). If set to None, the library name will
-                       be &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext>. The default value is None.
-                       Note that the regular static library (not lib_in_lib) is always named &lt;lib_prefix>&lt;current directory name>&lt;static_lib_ext>.
+   be &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext>. The default value is None.
+   Note that the regular static library (not lib_in_lib) is always named &lt;lib_prefix>&lt;current directory name>&lt;static_lib_ext>.
   
  * **detect_exe**: The method to use for executable detection (ie, if an object file exports a main() function).
-                   If set to "exact", the link module uses the linker instance's 'contains_main_function' method
-                   to determine if each object file contains a main() function. If set to "simple", the link module
-                   will use the comments_regex and main_function_regex to determine if the source file that generated
-                   each object file contains a main() function (note that this only applies to object files for which
-                   the source is known, ie the contents of the 'objects' dict). If set to False/None, then no automatic
-                   detection of executables will be performed. The default value is "exact".
+   If set to "exact", the link module uses the linker instance's 'contains_main_function' method
+   to determine if each object file contains a main() function. If set to "simple", the link module
+   will use the comments_regex and main_function_regex to determine if the source file that generated
+   each object file contains a main() function (note that this only applies to object files for which
+   the source is known, ie the contents of the 'objects' dict). If set to False/None, then no automatic
+   detection of executables will be performed. The default value is "exact".
  * **link_cxx**: If True, the link module will tell the linker instance to link C++ code. If False, the link will be done
-                 for C code. The default value is False, but may be set to True by the c module if any C++ source files
-                 are detected. Note that C++ mode will be used for linking if any of the library dependencies (from the
-                 'depdirs' and 'projdirs' properties) contain C++ code.
- * **make_static_lib**: Whether or not to create a static library containing the non-executable object files.
-                        The default value is True.
+   for C code. The default value is False, but may be set to True by the c module if any C++ source files
+   are detected. Note that C++ mode will be used for linking if any of the library dependencies (from the
+   'depdirs' and 'projdirs' properties) contain C++ code.
+ * **make_static_lib**: Whether or not to create a static library containing the non-executable object files. The default value is True.
  * **make_shared_lib**: Whether or not to create a shared library containing the non-executable files (linked with all library dependencies).
-                        The default value is False.
+   The default value is False.
  * **strip**: Whether or not to strip the resulting shared library and/or executables. The default value is False.
  * **lib_in_lib**: If True (and a static library is being created), the link module will create an additional static library
-                   named &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext> (or &lt;static_libname>, if set) which
-                   contains the local library contents as well as the contents of all library dependencies from 'local_static_libs',
-                   and transitively all 'static_libs', 'depdirs', and 'projdirs' libraries - ie the link module will recursively
-                   gather all the static library dependencies from all the dependency directories. Useful for generating a
-                   single static library for release that contains all of its dependencies.
+   named &lt;lib_prefix>&lt;current directory name>_all&lt;static_lib_ext> (or &lt;static_libname>, if set) which
+   contains the local library contents as well as the contents of all library dependencies from 'local_static_libs',
+   and transitively all 'static_libs', 'depdirs', and 'projdirs' libraries - ie the link module will recursively
+   gather all the static library dependencies from all the dependency directories. Useful for generating a
+   single static library for release that contains all of its dependencies.
  * **unique_names**: If True, the output libraries/executables will be named according to the path from the project directory, to avoid
-                     naming conflicts when the build directory is not a relative path. The default value is False.
+   naming conflicts when the build directory is not a relative path. The default value is False.
   
  * **exe_objs**: A list of object files to link into executables (without checking whether they contain a main() function).
  * **non_exe_objs**: A list of object files that should not be linked into an executable, even if they contain a main() function.
  * **objects**: A dict mapping &lt;object file>: &lt;source file>. This allows the link module to determine which source file
-                was compiled to each object file when "simple" main detection is being used. Filled in by the c module.
+   was compiled to each object file when "simple" main detection is being used. Filled in by the c module.
  * **obj_nosrc**: A list of object files for which the source file is not known.
  * **non_lib_objs**: A list of object files which should not be linked into a library (static or shared).
   
  * **depdirs**: A list of directories that the object files in this directory depend on. The link module will instruct emk
-                to recurse into these directories. When linking, the flags, static libs, and syslibs from these directory
-                dependencies will be included in the link (including any from depdirs of the depdirs, and so on - the flags
-                and libs are gathered transitively). It is acceptable to have circular dependencies in the depdirs.
+   to recurse into these directories. When linking, the flags, static libs, and syslibs from these directory
+   dependencies will be included in the link (including any from depdirs of the depdirs, and so on - the flags
+   and libs are gathered transitively). It is acceptable to have circular dependencies in the depdirs.
  * **projdirs**: A list of dependency directories (like depdirs) that are resolved relative to the project directory.
   
  * **static_libs**: A list of paths to static libraries to link in (transitively included by links that depend on this directory).
-                    Relative paths will be resolved relative to the current scope.
+   Relative paths will be resolved relative to the current scope.
  * **local_static_libs**: A list of paths to static libraries to link in; not transitively included.
-                          Relative paths will be resolved relative to the current scope.
+   Relative paths will be resolved relative to the current scope.
  * **syslibs**: A list of library names to link in (like '-l&lt;name>.'). Transitively included by links that depend on this directory.
  * **local_syslibs**: A list of library names to link in; not transitively included.
  * **syslib_paths**: A list of directories to search for named libraries (ie syslibs). Transitively included by links that depend on this directory.
-                     Relative paths will be resolved relative to the current scope.
+   Relative paths will be resolved relative to the current scope.
  * **local_syslib_paths**: A list of directories to search for named libraries; not transitively included.
-                           Relative paths will be resolved relative to the current scope.
+   Relative paths will be resolved relative to the current scope.
   
  * **flags**: A list of additional flags to pass to the linker (transitively included by links that depend on this directory).
  * **local_flags**: A list of additional flags to pass to the linker; not transitively included.
- * **libflags**: A list of additional flags to pass to the linker when linking a shared library. Transitively included by links
-                 that depend on this directory.
+ * **libflags**: A list of additional flags to pass to the linker when linking a shared library. Transitively included by links that depend on this directory.
  * **local_libflags**: A list of additional flags to pass to the linker when linking a shared library; not transitively included.
  * **exeflags**: A list of additional flags to pass to the linker when linking an executable. Transitively included by links that depend on this directory.
  * **local_exeflags**: A list of additional flags to pass to the linker when linking an executable; not transitively included.

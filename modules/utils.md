@@ -86,19 +86,18 @@ Arguments:
 Keyword arguments:
 
  * **cwd**: Set the working directory that the subprocess will run in. By default, the subprocess will run
-            in the working directory of the current process.
+   in the working directory of the current process.
  * **env**: Set the environment for the calling process. Passed directly to subprocess.Popen().
-            The default value is None (ie, the current process environment will be used).
+   The default value is None (ie, the current process environment will be used).
  * **noexit**: If True, a non-zero exit code will not raise an error; instead, the normal (stdout, stderr, code) will
-               be returned. The default value is False.
+   be returned. The default value is False.
  * **print_call**: If True, the subprocess call will be logged. The default value is True.
  * **print_stdout**: If True, the stdout of the subprocess will be logged (after the subprocess exits). Otherwise,
-                     the subprocess stdout will not be logged. The default value is False.
+   the subprocess stdout will not be logged. The default value is False.
  * **print_stderr**: If True, the stderr of the subprocess will be logged (after the subprocess exits). If "nonzero",
-                     the subprocess stderr will be logged only if the subprocess exits abnormally (with a nonzero exit code).
-                     If False, the subprocess stderr will not be logged. The default value is "nonzero".
- * **error_stream**: Controls which output stream is logged as an error. Can be set to "none", "stdout", "stderr", or "both".
-			         The default value is "stderr".
+   the subprocess stderr will be logged only if the subprocess exits abnormally (with a nonzero exit code).
+   If False, the subprocess stderr will not be logged. The default value is "nonzero".
+ * **error_stream**: Controls which output stream is logged as an error. Can be set to "none", "stdout", "stderr", or "both". The default value is "stderr".
 
 #### `utils.mark_virtual_rule(produces, requires)`
 Define an emk rule to mark the productions as virtual.
@@ -115,7 +114,7 @@ Directories containing the destination that do not exist will be created.
 Arguments:
 
  * **source**: The source file to copy; it treated as an emk dependency (so if there is a rule that produces the source,
-               that rule will be executed before the copy rule is).
+   that rule will be executed before the copy rule is).
  * **dest**: The path to copy the file to; must include the destination file name (ie not just the directory).
 
 #### `utils.clean_rule(*patterns)`

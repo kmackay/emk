@@ -145,17 +145,17 @@ or config files; you can just use emk.&lt;whatever> directly.
 
 ### Global modifiable properties:
  * **default_has_changed**: The default function to determine if a rule requirement or product has changed.
-                            If replaced, the replacement function should take a single argument which is the absolute
-                            path of the thing to check to see if it has changed. When this function is executing,
-                            emk.current_rule and emk.rule_cache() are available.
+   If replaced, the replacement function should take a single argument which is the absolute
+   path of the thing to check to see if it has changed. When this function is executing,
+   emk.current_rule and emk.rule_cache() are available.
 
 ### Scoped read-only properties (apply only to the current scope):
  * **scope_name**: The name of the current scope. May be one of ['global', 'project', 'subproj', 'rules'].
  * **proj_dir**: The absolute path of the project directory for the current scope.
  * **scope_dir**: The absolute path of the directory in which the scope was created
-                  (eg, the directory from which the emk_&lt;scope name>.py file was loaded).
+   (eg, the directory from which the emk_&lt;scope name>.py file was loaded).
  * **local_targets**: The dict of potential targets (ie, rule products) defined in the current scope.
-                      This maps the original target path (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
+   This maps the original target path (ie, as passed into emk.rule() or @emk.make_rule) to the emk.Target instance.
  * **current_rule**: The currently executing rule (an emk.Rule instance), or None if a rule is not being executed.
   
 ### Scoped modifiable properties (inherited by child scopes):
@@ -303,26 +303,26 @@ Arguments:
 
  * **func**: The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
  * **produces**: List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
-                 Project and build dir placeholders will be resolved according to the current scope.
-                 Empty paths ("") are ignored. This argument will be converted into a list of canonical paths, and
-                 passed as the first argument to the rule function.
+   Project and build dir placeholders will be resolved according to the current scope.
+   Empty paths ("") are ignored. This argument will be converted into a list of canonical paths, and
+   passed as the first argument to the rule function.
  * **requires**: List of paths that the rule requires to be built before it can be executed (ie, dependencies).
-                 The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
-                 be resolved according to each path. Empty paths ("") are ignored. This may include the special
-                 `emk.ALWAYS_BUILD` token to indicate that the rule should always be executed. This argument will be
-                 converted into a list of canonical paths, and passed as the second argument to the rule function.
+   The paths may be absolute, or relative to the scope dir. Project and build dir placeholders will
+   be resolved according to each path. Empty paths ("") are ignored. This may include the special
+   `emk.ALWAYS_BUILD` token to indicate that the rule should always be executed. This argument will be
+   converted into a list of canonical paths, and passed as the second argument to the rule function.
  * **args**: Additional arguments that will be passed to the rule function.
  * **kwargs**: Keyword arguments - see below.
 
 Keyword arguments:
 
  * **cwd_safe**: If True, the rule is considered to be cwd-safe (ie, does not depend on the current working
-                 directory). The default value is False.
+   directory). The default value is False.
  * **ex_safe**: If False, then emk will print a warning message if the execution of the rule is interrupted
-                in any way. The warning indicates that the rule was partially executed and may have left partial
-                build products, so the build should be cleaned. The default value is False.
+   in any way. The warning indicates that the rule was partially executed and may have left partial
+   build products, so the build should be cleaned. The default value is False.
  * **has_changed**: The function to execute for this rule to determine if the dependencies (or "rebuild if changed"
-                    products) have changed. The default value is `emk.default_has_changed`.
+   products) have changed. The default value is `emk.default_has_changed`.
 
 If you have a one-off build rule, you may want to use a decorator on the rule function instead, using
 `@emk.make_rule(produces, requires, *args, **kwargs)`. The arguments are the same as for `emk.rule()`, except the rule function
