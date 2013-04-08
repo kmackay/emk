@@ -1,3 +1,8 @@
+---
+title: "emk: Java module"
+layout: module
+---
+
 Java Module
 ===========
 

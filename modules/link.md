@@ -1,3 +1,8 @@
+---
+title: "emk: Link module"
+layout: module
+---
+
 Link Module
 ===========
 
@@ -32,12 +37,12 @@ configure the link module to do "simple" main() detection (by parsing the source
 `detect_exe` property to "simple". If this is set (or if main() detection is disabled entirely), the link rules
 will be defined and executed in the first build phase.
 
-The link module will always define rules creating the "link.__static_lib__" and "link.__exes__" targets.
-"link.__static_lib__" depends on the static library being generated (or nothing, if there is no static library to generate).
-"link.__exes__" depends on all executables being linked. If a shared library is being created, the link module will
-define a rule for "link.__shared_lib__" that depends on the shared library.
+The link module will always define rules creating the `link.__static_lib__` and `link.__exes__` targets.
+`link.__static_lib__` depends on the static library being generated (or nothing, if there is no static library to generate).
+`link.__exes__` depends on all executables being linked. If a shared library is being created, the link module will
+define a rule for `link.__shared_lib__` that depends on the shared library.
 
-If the 'detect_exe' property is set to "exact", then the link module defines an autobuild rule for "link.__interim__"
+If the 'detect_exe' property is set to "exact", then the link module defines an autobuild rule for `link.__interim__`
 which depends on all object files. This will cause all object files to be built if required in the first build phase,
 so that main() detection can occur in postbuild.
 
@@ -49,6 +54,7 @@ Classes
 #### **GccLinker**: A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
 
 Properties (defaults set based on the path prefix passed to the constructor):
+
  * **c_path**: The path of the C linker (eg "gcc").
  * **cxx_path**: The path of the C++ linker (eg "g++").
  * **ar_path**: The path of the archive tool to create static libs (eg "ar").
@@ -60,6 +66,7 @@ Properties (defaults set based on the path prefix passed to the constructor):
 #### **OsxGccLinker**: A linker class for linking using gcc/g++ on OS X; inherits from GccLinker. Uses libtool to create static libraries for multi-arch support.
 
 Properties (defaults set based on the path prefix passed to the constructor):
+
  * **lipo_path**: The path of the 'lipo' executable.
  * **libtool_path**: The path of the 'libtool' executable.
 
@@ -68,6 +75,7 @@ Properties (defaults set based on the path prefix passed to the constructor):
 #### **MsvcLinker**: A linker class for linking using Microsoft's Visual C++ tools on Windows.
 
 Properties (defaults set based on the path prefix passed to the constructor):
+
  * **dumpbin_exe**: The absolute path to the dumpbin executable.
  * **lib_exe**: The absolute path to the lib executable.
  * **link_exe**: The absolute path to the link executable.
@@ -82,8 +90,7 @@ All properties are inherited from the parent scope if there is one.
   
  * **linker**: The linker instance used to link executables / shared libraries, and to create static libraries.
                This is set to link.GccLinker() by default on Linux, link.MingwGccLinker() by default on Windows, and link.OsxGccLinker() by default on OS X.
- * **shared_lib_ext**: The extension to use for shared libraries. The default is ".so" on Linux, ".dll" on Windows, and
-                       ".dylib" on OS X.
+ * **shared_lib_ext**: The extension to use for shared libraries. The default is ".so" on Linux, ".dll" on Windows, and ".dylib" on OS X.
  * **static_lib_ext**: The extension for static libraries. Set to ".a" by default.
  * **exe_ext**: The extension to use for exectuables. Set to "" (empty string) by default.
  * **lib_prefix**: The prefix to use for static/shared libraries. Set to "lib" by default.
@@ -164,6 +171,7 @@ Determine if an object file contains a main() function. This is used by the link
 should be linked into executables. Returns True if the object file contains a main() function, False otherwise.
 
 Arguments:
+
  * **objfile**: The path to the object file.
 
 #### `create_static_lib(self, dest, source_objs, other_libs)`
@@ -175,6 +183,7 @@ the link module will pass in the library dependencies of this library in the 'ot
 method must include the contents of all the other libraries in the generated static library.
 
 Arguments:
+
  * **dest**: The path of the static library to generate.
  * **source_objs**: A list of paths to object files to include in the generated static library.
  * **other_libs**: A list of paths to other static libraries whose contents should be included in the generated static library.
@@ -196,6 +205,7 @@ method must ensure that any ordering dependencies are solved. The GCC linker use
 can be slow but in reality it makes very little difference.
 
 Arguments:
+
  * **dest**: The path of the destination file to produce.
  * **source_objs**: A list of object files to link in.
  * **abs_libs**: A list of absolute paths to (static) libraries that should be linked in.
@@ -213,6 +223,7 @@ Strip unnecessary symbols from the given shared library / executable. Called by 
 if its `strip` property is True.
 
 Arguments:
+
  * **path**: The path of the file to strip.
 
 #### `obj_ext(self)`

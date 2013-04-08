@@ -1,3 +1,8 @@
+---
+title: "emk: C module"
+layout: module
+---
+
 C Module
 ========
 
@@ -25,12 +30,14 @@ Classes
 #### **GccCompiler**: A compiler class that uses gcc/g++ to compile.
 
 Properties (defaults set based on the path prefix passed to the constructor):
+
  * **c_path**: The path of the C compiler (eg "gcc").
  * **cxx_path**: The path of the C++ compiler (eg "g++").
 
 #### **MsvcCompiler**: A compiler class that uses the Microsoft Visual Studio command line tools to compile.
 
 Properties (defaults set based on the path prefix passed to the constructor):
+
  * **cl_exe**: The full path of the MSVC compiler (eg "C:\Program Files (x86)\Microsoft Visual Studio 10.0\VC\bin\cl.exe").
 
 Properties
@@ -84,12 +91,14 @@ This function should load any extra dependencies for the given object file path 
 dependency file for that path, or loaded from the emk.scope_cache(path) (or some other mechanism).
 
 Arguments:
+
  * **path**: The path of the object file to get dependencies for.
 
 #### `compile_c(self, source, dest, includes, defines, flags)`
 This function will be called to compile a C file into an object file. This function is not required if no C files will be compiled.
 
 Arguments:
+
  * **source**: The C source file path to compile.
  * **dest**: The output object file path.
  * **includes**: A list of extra include directories.
@@ -101,6 +110,7 @@ Arguments:
 This function will be called to compile a C++ file into an object file. This function is not required if no C++ files will be compiled.
 
 Arguments:
+
  * **source**: The C++ source file path to compile.
  * **dest**: The output object file path.
  * **includes**: A list of extra include directories.

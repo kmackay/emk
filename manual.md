@@ -1,3 +1,8 @@
+---
+title: emk Manual
+layout: default
+---
+
 emk Manual
 ==========
 
@@ -8,12 +13,13 @@ Arguments
 `emk target1 option1=val target2 ....`
 
 Arguments to emk can either be options or targets. An option is an argument of the form "key=value". Any arguments that do not contain '=' are treated
-as explicit targets to be built. You may specify targets that contain '=' using the special option "explicit_target=&lt;target name>". All options (whether
-or not they are recognized by emk) can be accessed via the emk.options dict.
+as explicit targets to be built. You may specify targets that contain '=' using the special option "explicit\_target=&lt;target name>". All options (whether
+or not they are recognized by emk) can be accessed via the `emk.options` dict.
         
 If no explicit targets are specified, emk will build all autobuild targets.
 
 Recognized options:
+
  * **log**: The log level that emk will use. May be one of ["debug", "info", "warning", "error", "critical"], 
             although error and critical are probably not useful. The default value is "info".
  * **emk_dev**: If set to "yes", developer mode is turned on. Currently this disables stack filtering so
@@ -55,6 +61,7 @@ Loading Sequence
 ----------------
 
 The build process in a given directory goes as follows:
+
   1. Load the global emk config from `<emk dir>/config/emk_global.py` (where &lt;emk dir> is the directory containing the emk.py module),
      if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
      working directory to the directory containing the config file. Note that the global config file may be a symlink.
@@ -98,8 +105,8 @@ Build Directory
 ---------------
 
 emk has a configurable build directory. This is used to store emk's cache, and is also where build products (from the supplied modules)
-are put. By default, the build directory is a relative path ("__build__"); this means that the cache and build products for a given directory
-that is being built (ie, a directory containing an `emk_rules.py` file) will be put into an "__build__" subdirectory of that directory.
+are put. By default, the build directory is a relative path (`__build__`); this means that the cache and build products for a given directory
+that is being built (ie, a directory containing an `emk_rules.py` file) will be put into a `__build__` subdirectory of that directory.
 The build directory may also be an absolute path, in which case build products for multiple directories may be put into that directory.
 
 The build directory is a scoped property of emk (`emk.build_dir`). This means that you can modify it in `emk_global.py`, `emk_project.py`,
@@ -177,10 +184,10 @@ emk module instance, but is usually a class named Module.
 
 An emk module instance must provide a new_scope() method that takes the new scope type, and returns an
 emk module instance (potentially the same module instance; it is not required to create a new module instance).
-In addition, a module instance may provide load_* or post_* methods, where * may be any of the scope types
-('global', 'project', 'subproj', or 'rules'). These methods should take no arguments. The load_* method is called
+In addition, a module instance may provide `load_*` or `post_*` methods, where `*` may be any of the scope types
+('global', 'project', 'subproj', or 'rules'). These methods should take no arguments. The `load_*` method is called
 when a new module instance is loaded into a scope of the corresponding type (after the new instance is created).
-The post_* method is called after the corresponding scope has been fully loaded (eg, after the emk_rules.py file
+The `post_*` method is called after the corresponding scope has been fully loaded (eg, after the emk_rules.py file
 has been imported for the rules scope).
 
 Modules should only add emk rules in the post_rules method (or later, if the post_rules method uses emk.do_later(),
@@ -194,6 +201,7 @@ time or when the module isntance is created) since this will probably lead to an
 To load a module (or multiple modules) at any time (except when executing a rule), use `emk.module(names)`:
 
 Arguments:
+
  * **names**: The list of modules names (or a single name) to load into the current scope.
 
 `emk.module(names)` returns the list of module instances corresponding to the given module names; None will be in the list for each module
@@ -216,6 +224,7 @@ error will be raised; however you can insert a module that will override a modul
 as long as the current scope has not yet loaded it.
 
 Arguments:
+
  * **name**: The name of the module being inserted (as would be passed to `emk.module()`)
  * **instance**: The module instance to insert.
 
@@ -291,6 +300,7 @@ If you have an existing rule function and you want to specify a build rule that 
 `emk.rule(func, produces, requires, *args, **kwargs)`
 
 Arguments:
+
  * **func**: The rule function to execute. Must take the correct number of arguments (produces, requires, and the additional args).
  * **produces**: List of paths that the rule produces. The paths may be absolute, or relative to the scope dir.
                  Project and build dir placeholders will be resolved according to the current scope.
@@ -305,6 +315,7 @@ Arguments:
  * **kwargs**: Keyword arguments - see below.
 
 Keyword arguments:
+
  * **cwd_safe**: If True, the rule is considered to be cwd-safe (ie, does not depend on the current working
                  directory). The default value is False.
  * **ex_safe**: If False, then emk will print a warning message if the execution of the rule is interrupted
