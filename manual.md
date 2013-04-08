@@ -62,20 +62,20 @@ Loading Sequence
 
 The build process in a given directory goes as follows:
 
-  1. Load the global emk config from `<emk dir>/config/emk_global.py` (where &lt;emk dir> is the directory containing the emk.py module),
-     if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
-     working directory to the directory containing the config file. Note that the global config file may be a symlink.
-  2. Find the project directory. The project directory is the closest ancestor to the current directory that
-     contains an `emk_project.py` file, or the root directory if no project file is found. The project directory for the current directory
-     is available via `emk.proj_dir`.
-  3. Load the project file `emk_project.py` from the project directory if it exists and has not already been loaded (creates a new scope, with the global scope as a parent).
-  4. For each directory from the project directory to the current directory, load `emk_subproj.py` from that directory
-     if it exists and has not already been loaded (creates a new scope, with the previous scope as a parent).
-  5. Create a new scope for the current directory (the "rules scope").
-  6. Load any premodules (specified via appending to the `emk.pre_modules` list).
-  7. Load `emk_rules.py` from the current directory if it exists; otherwise, load the default modules (if any; specified by appending to the `emk.default_modules` list).
-  8. Run any module post_rules() methods for modules loaded into the rules scope.
-  9. Recurse into any directories (specified using `emk.recurse()` or `emk.subdir()`) that have not already been visited.
+ 1. Load the global emk config from `<emk dir>/config/emk_global.py` (where &lt;emk dir> is the directory containing the emk.py module),
+    if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
+    working directory to the directory containing the config file. Note that the global config file may be a symlink.
+ 2. Find the project directory. The project directory is the closest ancestor to the current directory that
+    contains an `emk_project.py` file, or the root directory if no project file is found. The project directory for the current directory
+    is available via `emk.proj_dir`.
+ 3. Load the project file `emk_project.py` from the project directory if it exists and has not already been loaded (creates a new scope, with the global scope as a parent).
+ 4. For each directory from the project directory to the current directory, load `emk_subproj.py` from that directory
+    if it exists and has not already been loaded (creates a new scope, with the previous scope as a parent).
+ 5. Create a new scope for the current directory (the "rules scope").
+ 6. Load any premodules (specified via appending to the `emk.pre_modules` list).
+ 7. Load `emk_rules.py` from the current directory if it exists; otherwise, load the default modules (if any; specified by appending to the `emk.default_modules` list).
+ 8. Run any module post_rules() methods for modules loaded into the rules scope.
+ 9. Recurse into any directories (specified using `emk.recurse()` or `emk.subdir()`) that have not already been visited.
 
 Once there are no more directories to recurse into, the prebuild functions are executed until there aren't any more.
 Prebuild functions specified during the prebuild stage are executed after all of the previous prebuild functions
