@@ -58,8 +58,8 @@ body {
 
 .floater a.download {
 	border: 1px solid;
-	border-radius: 7px;
-	padding: 0 5px;
+	border-radius: 5px;
+	padding: 1px 5px;
 	margin: 0 5px;
 }
 
