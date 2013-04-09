@@ -56,16 +56,32 @@ body {
 	margin: 10px 10px 0 0;
 }
 
-.floater a.download {
+.floater a.download,
+.floater2 a.download {
 	border: 1px solid;
 	border-radius: 5px;
 	padding: 1px 5px;
 	margin: 0 5px;
 }
 
-.floater a.download:hover {
+.floater a.download:hover,
+.floater2 a.download:hover {
 	background: #dbe7f9;
 	text-decoration: none;
+}
+
+.floater2 {
+	display: none;
+	padding: 0 10px;
+	margin: 0;
+	float: right;
+}
+
+.floater2 span.floaterbox {
+	display: inline-block;
+	padding: 5px 10px 0 0;
+	border: none;
+	margin: 0 10px 0 0;
 }
 
 section {
@@ -147,4 +163,62 @@ a:visited {
 
 footer {
 	text-align: center;
+}
+
+@media screen and (max-width: 960px) {
+  	.menu {
+		position: relative;
+		width: 100%;
+		padding: 5px 10px;
+		border: none;
+		border-bottom: 1px solid #aaa;
+		margin: 0;
+	}
+	
+	.menu li {
+		display: inline;
+		padding: 0 10px 0 0;
+	}
+	
+	.floater {
+		display: none;
+	}
+	
+	.floater2 {
+		display: block;
+	}
+	
+	section {
+		margin: 20px 75px;
+	}
+}
+
+@media screen and (max-width: 640px) {
+	.menu {
+		border: none;
+		border-bottom: 1px solid #aaa;
+	}
+	
+	.floater2 {
+		display: none;
+	}
+	
+  	.floater {
+		display: block;
+		position: relative;
+		padding: 0;
+		border-bottom: 1px solid #cddcf4;
+		background: #eee;
+	}
+	
+	.floater span.floaterbox {
+		padding: 5px 10px;
+		margin: 0;
+		border: none;
+	}
+	
+	section {
+		margin: 0;
+		border: none;
+	}
 }
