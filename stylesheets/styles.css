@@ -2,24 +2,4 @@ body {
 	background: #f8f8f8;
 	font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
 	font-weight: 250;
-	margin: 0;
-	padding: 0;
-}
-
-section {
-	margin: 0;
-	border: none;
-}
-
-a {
-	text-decoration: none;
-	color: #1d65d1;
-}
-
-a:hover {
-	text-decoration: underline;
-}
-
-a:visited {
-	color: #99b;
 }
