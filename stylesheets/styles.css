@@ -148,6 +148,11 @@ section p:last-child {
 	margin-bottom: 0;
 }
 
+section img {
+	max-width: 100%;
+	height: auto;
+}
+
 a {
 	text-decoration: none;
 	color: #1d65d1;
