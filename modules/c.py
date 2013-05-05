@@ -276,7 +276,6 @@ class Module(object):
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
         self.MsvcCompiler = _MsvcCompiler
-        self.ClangStaticCompiler = _ClangStaticCompiler
         
         self.link = emk.module("link")
         self.c = emk.Container()
