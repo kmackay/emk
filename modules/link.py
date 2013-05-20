@@ -711,6 +711,8 @@ class Module(object):
     
     def _get_needed_by(self, d, result):
         global link_cache
+        if(d == emk.scope_dir):
+            return
         result.add(d)
         for sub in link_cache[d]._depended_by:
             if not sub in result:
