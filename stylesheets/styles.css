@@ -230,4 +230,8 @@ pre {
 		margin: 0;
 		border: none;
 	}
+	
+	footer {
+		border-top: 1px solid #cddcf4;
+	}
 }
