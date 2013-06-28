@@ -1567,6 +1567,7 @@ class EMK_Base(object):
             if p and p not in seen_produces:
                 seen_produces.add(p)
                 fixed_produces.append(p)
+                emk.depend(p, "emk_rules.py")
         fixed_requires = [_make_require_abspath(r, self.scope) for r in _flatten_gen(requires) if r != ""]
         
         if not has_changed:
