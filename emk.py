@@ -122,6 +122,7 @@ class _ScopeData(object):
         self.scope_type = scope_type
         self.dir = scope_dir
         self.proj_dir = proj_dir
+        self.has_rules_file = False
         
         self._cache = None
         self._do_later_funcs = []
@@ -1447,6 +1448,7 @@ class EMK_Base(object):
         self.scope.prepare_do_later()
         self.module(self.scope.pre_modules) # load preload modules
         # Try to load the emk_rules.py file. If we can't load the default modules instead (if any).
+        self.scope.has_rules_file = os.path.exists("emk_rules.py")
         if not self.import_from([path], "emk_rules"):
             self.module(self.scope.default_modules)
         self._run_do_later_funcs()
@@ -1567,7 +1569,8 @@ class EMK_Base(object):
             if p and p not in seen_produces:
                 seen_produces.add(p)
                 fixed_produces.append(p)
-                emk.depend(p, "emk_rules.py")
+                if self.scope.has_rules_file:
+                    emk.depend(p, "emk_rules.py")
         fixed_requires = [_make_require_abspath(r, self.scope) for r in _flatten_gen(requires) if r != ""]
         
         if not has_changed:
