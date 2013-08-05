@@ -224,16 +224,18 @@ class _GccLinker(object):
         """
         return ".o"
 
-class _OsxGccLinker(_GccLinker):
+class _OsxLinker(_GccLinker):
     """
-    A subclass of GccLinker for linking on OS X.
+    A linker class for linking on OS X using clang.
     
     Properties:
       lipo_path    -- The path of the 'lipo' executable.
       libtool_path -- The path of the 'libtool' executable.
     """
     def __init__(self, path_prefix=""):
-        super(_OsxGccLinker, self).__init__(path_prefix)
+        super(_OsxLinker, self).__init__(path_prefix)
+        self.c_path = path_prefix + "clang"
+        self.cxx_path = path_prefix + "clang++"
         self.lipo_path = self.path_prefix + "lipo"
         self.libtool_path = self.path_prefix + "libtool"
         self.main_nm_regex = re.compile(r'\s+T\s+_main\s*$', re.MULTILINE)
@@ -503,7 +505,7 @@ class Module(object):
     
     Classes:
       GccLinker      -- A linker class that uses gcc/g++ to link, and uses ar to create static libraries.
-      OsxGccLinker   -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
+      OsxLinker      -- A linker class for linking using gcc/g++ on OS X. Uses libtool to create static libraries.
       MingwGccLinker -- A linker class that uses gcc/g++ to link on Windows, and uses ar to create static libraries.
       MsvcLinker     -- A linker class that uses MSVC's link.exe to link, and lib.exe to create static libraries.
     
@@ -512,7 +514,7 @@ class Module(object):
       main_function_regex -- The regex to use to detect a main() function when using "simple" main() detection.
       
       linker         -- The linker instance used to link executables / shared libraries, and to create static libraries.
-                        This is set to link.GccLinker() by default on Linux, and link.OsxGccLinker() by default on OS X.
+                        This is set to link.GccLinker() by default on Linux, and link.OsxLinker() by default on OS X.
       shared_lib_ext -- The extension to use for shared libraries. The default is ".so" on Linux, and ".dylib" on OS X.
       static_lib_ext -- The extension for static libraries. Set to ".a" by default.
       exe_ext        -- The extension to use for exectuables. Set to "" (empty string) by default.
@@ -586,7 +588,7 @@ class Module(object):
     """
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
-        self.OsxGccLinker = _OsxGccLinker
+        self.OsxLinker = _OsxLinker
         self.MingwGccLinker = _MingwGccLinker
         self.MsvcLinker = _MsvcLinker
         
@@ -651,7 +653,7 @@ class Module(object):
             self.lib_prefix = "lib"
             
             if sys.platform == "darwin":
-                self.linker = self.OsxGccLinker()
+                self.linker = self.OsxLinker()
                 self.shared_lib_ext = ".dylib"
             elif sys.platform == "win32":
                 self.linker = self.MingwGccLinker()

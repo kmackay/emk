@@ -115,6 +115,19 @@ class _GccCompiler(object):
         """
         return ".o"
 
+class _ClangCompiler(_GccCompiler):
+    """
+    A compiler class for compiling using clang.
+    
+    Properties:
+      lipo_path    -- The path of the 'lipo' executable.
+      libtool_path -- The path of the 'libtool' executable.
+    """
+    def __init__(self, path_prefix=""):
+        super(_ClangCompiler, self).__init__(path_prefix)
+        self.c_path = path_prefix + "clang"
+        self.cxx_path = path_prefix + "clang++"
+
 class _MsvcCompiler(object):
     """
     Compiler class for using Microsoft's Visual C++ to compile C/C++.
@@ -234,8 +247,9 @@ class Module(object):
     is responsible for marking the object files as autobuild if desired.
     
     Classes:
-      GccCompiler  -- A compiler class that uses gcc/g++ to compile.
-      MsvcCompiler -- A compiler class that uses MSVC on Windows to compile binaries.
+      GccCompiler   -- A compiler class that uses gcc/g++ to compile.
+      ClangCompiler -- A compiler class that uses clang/clang++ to compile.
+      MsvcCompiler  -- A compiler class that uses MSVC on Windows to compile binaries.
     
     Properties (inherited from parent scope):
       compiler     -- The compiler instance that is used to load dependencies and compile C/C++ code.
@@ -275,6 +289,7 @@ class Module(object):
     """
     def __init__(self, scope, parent=None):
         self.GccCompiler = _GccCompiler
+        self.ClangCompiler = _ClangCompiler
         self.MsvcCompiler = _MsvcCompiler
         
         self.link = emk.module("link")
@@ -310,7 +325,10 @@ class Module(object):
 
             self.unique_names = parent.unique_names
         else:
-            self.compiler = self.GccCompiler()
+            if sys.platform == "darwin":
+                self.compiler = self.ClangCompiler()
+            else:
+                self.compiler = self.GccCompiler()
             
             self.include_dirs = []
             self.defines = {}
