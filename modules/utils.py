@@ -195,8 +195,18 @@ class Module(object):
         if error_stream == "stderr" or error_stream == "both":
             stderr_tag = emk.style_tag('stderr')
 
-        proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
-        proc_stdout, proc_stderr = proc.communicate()
+        try:
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
+            proc_stdout, proc_stderr = proc.communicate()
+        except OSError as e:
+            stack = []
+            if emk.options["log"] == "debug":
+                stack.append("Call stack:")
+                stack += emk.fix_stack(traceback.extract_stack()[:-1])
+                if emk.current_rule:
+                    stack.append("Rule definition:")
+                    stack.extend([emk.style_tag('rule_stack') + line + emk.end_style() for line in emk.current_rule.stack])
+            raise emk.BuildError("Could not call '%s' as a subprocess: %s" % (' '.join(args), str(e)), stack)
         strings = []
         if print_call:
             strings.append(' '.join(args))
