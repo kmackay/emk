@@ -823,7 +823,7 @@ class Module(object):
         
         if not self.detect_exe:
             pass
-        elif self.detect_exe.lower() == "simple":
+        elif self.detect_exe is True or self.detect_exe.lower() == "simple":
             for obj, src in self.objects.items():
                 if (not obj in exe_objs) and (not obj in non_exe_objs) and self._simple_detect_exe(src):
                     exe_objs.add(obj)
