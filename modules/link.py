@@ -585,6 +585,9 @@ class Module(object):
       exeflags       -- A list of additional flags to pass to the linker when linking an executable. Transitively included by links
                         that depend on this directory.
       local_exeflags -- A list of additional flags to pass to the linker when linking an executable; not transitively included.
+      
+      There are also c-specific and c++-specific versions of the above flags, which are accessed through c.flags (, c.local_flags, ...) and
+      cxx.flags (, cxx.local_flags, ...) respectively.
     """
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
@@ -600,6 +603,9 @@ class Module(object):
         self._local_syslib_paths = set()
         self._static_libs = set()
         self._local_static_libs = set()
+        
+        self.c = emk.Container()
+        self.cxx = emk.Container()
         
         if parent:
             self.comments_regex = parent.comments_regex
@@ -645,6 +651,20 @@ class Module(object):
             self.local_libflags = list(parent.local_libflags)
             self.exeflags = list(parent.exeflags)
             self.local_exeflags = list(parent.local_exeflags)
+            
+            self.c.flags = list(parent.c.flags)
+            self.c.local_flags = list(parent.c.local_flags)
+            self.c.libflags = list(parent.c.libflags)
+            self.c.local_libflags = list(parent.c.local_libflags)
+            self.c.exeflags = list(parent.c.exeflags)
+            self.c.local_exeflags = list(parent.c.local_exeflags)
+            
+            self.cxx.flags = list(parent.cxx.flags)
+            self.cxx.local_flags = list(parent.cxx.local_flags)
+            self.cxx.libflags = list(parent.cxx.libflags)
+            self.cxx.local_libflags = list(parent.cxx.local_libflags)
+            self.cxx.exeflags = list(parent.cxx.exeflags)
+            self.cxx.local_exeflags = list(parent.cxx.local_exeflags)
         else:
             self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
             self.main_function_regex = re.compile(r'int\s+main\s*\(')
@@ -699,6 +719,20 @@ class Module(object):
             self.local_libflags = []
             self.exeflags = []
             self.local_exeflags = []
+            
+            self.c.flags = []
+            self.c.local_flags = []
+            self.c.libflags = []
+            self.c.local_libflags = []
+            self.c.exeflags = []
+            self.c.local_exeflags = []
+            
+            self.cxx.flags = []
+            self.cxx.local_flags = []
+            self.cxx.libflags = []
+            self.cxx.local_libflags = []
+            self.cxx.exeflags = []
+            self.cxx.local_exeflags = []
     
     @property
     def obj_ext(self):
@@ -940,6 +974,8 @@ class Module(object):
         global link_cache
         
         flags = self.linker.shlib_opts() + self.local_flags + self.flags + self.local_libflags + self.libflags
+        c_flags = self.c.local_flags + self.c.flags + self.c.local_libflags + self.c.libflags
+        cxx_flags = self.cxx.local_flags + self.cxx.flags + self.cxx.local_libflags + self.cxx.libflags
 
         abs_libs = self._local_static_libs | self._static_libs
         syslibs = set(self.local_syslibs) | set(self.syslibs)
@@ -950,12 +986,23 @@ class Module(object):
             cache = link_cache[d]
             flags += cache.flags
             flags += cache.libflags
+            c_flags += cache.c.flags
+            c_flags += cache.c.libflags
+            cxx_flags += cache.cxx.flags
+            cxx_flags += cache.cxx.libflags
+            
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
             abs_libs |= cache._static_libs
             syslibs |= set(cache.syslibs)
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
+        
+        if link_cxx:
+            flags += cxx_flags
+        else:
+            flags += c_flags
+        
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith(self.obj_ext)], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
@@ -969,6 +1016,8 @@ class Module(object):
         global link_cache
         
         flags = self.linker.exe_opts() + self.local_flags + self.flags + self.local_exeflags + self.exeflags
+        c_flags = self.c.local_flags + self.c.flags + self.c.local_exeflags + self.c.exeflags
+        cxx_flags = self.cxx.local_flags + self.cxx.flags + self.cxx.local_exeflags + self.cxx.exeflags
 
         abs_libs = self._local_static_libs | self._static_libs
         if self._static_libpath:
@@ -981,12 +1030,23 @@ class Module(object):
             cache = link_cache[d]
             flags += cache.flags
             flags += cache.exeflags
+            c_flags += cache.c.flags
+            c_flags += cache.c.exeflags
+            cxx_flags += cache.cxx.flags
+            cxx_flags += cache.cxx.exeflags
+            
             if cache._static_libpath:
                 abs_libs.add(os.path.join(d, cache._static_libpath))
             abs_libs |= cache._static_libs
             syslibs |= set(cache.syslibs)
             lib_paths |= cache._syslib_paths
             link_cxx = link_cxx or cache.link_cxx
+        
+        if link_cxx:
+            flags += cxx_flags
+        else:
+            flags += c_flags
+        
         try:
             self.linker.do_link(produces[0], [o for o in requires if o.endswith(self.obj_ext)], list(abs_libs), \
                 lib_paths, syslibs, utils.unique_list(flags), cxx_mode=link_cxx)
