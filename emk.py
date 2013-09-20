@@ -993,9 +993,10 @@ class EMK_Base(object):
             self._examine_target(target, False)
 
     def _examine_target(self, target, weak):
-        if target._visited or target._built:
+        if target._built or target._visited is True or (target._visited == "weak" and weak):
             return
-        target._visited = True
+        
+        target._visited = "weak" if weak else True
         self.log.debug("Examining target %s", target.abs_path)
 
         for path in target.attached:
@@ -1909,7 +1910,7 @@ class EMK(EMK_Base):
         
         unbuilt = set()
         for path, target in self._targets.items():
-            if target._visited and not target._built:
+            if target._visited is True and not target._built:
                 unbuilt.add(target)
         
         unbuilt_lines = []
