@@ -1423,6 +1423,8 @@ class EMK_Base(object):
                         pickle.dump(scope._cache, f, -1)
                 except IOError:
                     self.log.error("Failed to write cache file %s", cache_path)
+                    self._remove_cache(cache_path)
+                    raise
                 except:
                     self._remove_cache(cache_path)
                     raise
