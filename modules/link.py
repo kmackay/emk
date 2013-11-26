@@ -311,7 +311,7 @@ class _MsvcLinker(object):
           path_prefix - The prefix to use for the vcvarsall.bat file. The default value is derived from the VS*COMNTOOLS environment variable.
         """
         if path_prefix is None:
-            for v in [110, 100, 90, 80, 71, 70]:
+            for v in [120, 110, 100, 90, 80, 71, 70]:
                 try:
                     path_prefix = os.path.join(os.environ["VS%uCOMNTOOLS" % v], "..", "..", "VC")
                 except KeyError:
