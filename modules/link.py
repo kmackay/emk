@@ -404,10 +404,14 @@ class _MsvcLinker(object):
         start = 0
         while left > 32:
             cur_files = files[start:start+32]
+            if start != 0:
+                cur_files.append(dest)
             start += 32
             left -= 32
             self.add_to_static_lib(dest, cur_files)
         cur_files = files[start:]
+        if(start != 0):
+            cur_files.append(dest)
         self.add_to_static_lib(dest, cur_files)
     
     def static_lib_cwd_safe(self):
