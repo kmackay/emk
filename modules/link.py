@@ -352,7 +352,7 @@ class _MsvcLinker(object):
         self.lib_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "lib.exe")
         self.link_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "link.exe")
 
-        self.main_dumpbin_regex = re.compile(r'[0-9a-fA-F]{3}\s+[0-9a-fA-F]{4,16}\s+SECT[0-9]+\s+notype\s+\(\)\s+External\s+\|\s+_?(w?main|WinMain)\b')
+        self.main_dumpbin_regex = re.compile(r'External\s*\|\s*_?(w?main|WinMain)\b')
     
     def contains_main_function(self, objfile):
         """
@@ -434,7 +434,8 @@ class _MsvcLinker(object):
           cxx_mode    -- If True, then the object files or libraries contain C++ code.
         """
         flat_flags = utils.flatten(flags)
-        lib_dir_flags = ['/LIBPATH:"%s"' % d for d in lib_dirs]
+        lib_dir_flags = ['/LIBPATH:%s' % d for d in lib_dirs]
+        rel_libs = [lib + ".lib" for lib in rel_libs]
 
         utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs,
             env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")

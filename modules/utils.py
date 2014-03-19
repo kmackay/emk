@@ -355,7 +355,7 @@ class Module(object):
         
         out, err, code = self.call(env_cmd, '&&', 'echo', tag, '&&', 'set', env=initial, shell=True, print_call=False)
 
-        lines = out.split('\n')
+        lines = out.splitlines()
         _consume(itertools.takewhile(lambda l: tag not in l, lines))
         handle_line = lambda l: l.rstrip().split('=',1)
 

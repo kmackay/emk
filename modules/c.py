@@ -178,7 +178,7 @@ class _MsvcCompiler(object):
         stdout, stderr, returncode = utils.call(args, env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")
 
         items = []
-        for l in stdout.split('\n'):
+        for l in stdout.splitlines():
             m = self._dep_re.match(l)
             if m:
                 items.append(m.group(1))
