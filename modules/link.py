@@ -441,7 +441,7 @@ class _MsvcLinker(object):
         rel_libs = [lib + ".lib" for lib in rel_libs]
 
         utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs,
-            env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")
+            env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
     
     def link_cwd_safe(self):
         """

@@ -178,7 +178,7 @@ class _MsvcCompiler(object):
         args.extend(utils.flatten(flags))
         args.extend(['/Fo%s' % dest, source])
 
-        stdout, stderr, returncode = utils.call(args, env=self._env, print_stdout=False, print_stderr=False, error_stream="stdout")
+        stdout, stderr, returncode = utils.call(args, env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
 
         items = []
         for l in stdout.splitlines():
