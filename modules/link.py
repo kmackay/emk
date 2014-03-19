@@ -305,7 +305,7 @@ class _MsvcLinker(object):
     Linker class for using Visual Studio's command line tools to link.
     """
     @staticmethod
-    def vs_env(path_prefix, env_script):
+    def vs_env(path_prefix, env_script, target_arch):
         """
         Try to locate and load the environment of Visual Studio.
 
@@ -327,6 +327,9 @@ class _MsvcLinker(object):
                 arch = os.environ["PROCESSOR_ARCHITEW6432"].lower()
         except KeyError:
             arch = "x86"
+        
+        if target_arch is not None and target_arch != arch:
+            arch = arch + "_" + target_arch
 
         vcvars = os.path.join(path_prefix, env_script)
         env = utils.get_environment_from_batch_command([vcvars, arch])
@@ -334,7 +337,7 @@ class _MsvcLinker(object):
             env = utils.get_environment_from_batch_command(vcvars)
         return env
 
-    def __init__(self, path_prefix=None, env_script="vcvarsall.bat"):
+    def __init__(self, path_prefix=None, env_script="vcvarsall.bat", target_arch=None):
         """
         Create a new MsvcLinker instance.
         
@@ -349,7 +352,7 @@ class _MsvcLinker(object):
           main_dumpbin_regex -- The compiled regex to use to search for a main() function in the dumpbin output.
         """
         self.name = "msvc"
-        self._env = _MsvcLinker.vs_env(path_prefix, env_script)
+        self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
 
         self.dumpbin_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "dumpbin.exe")
         self.lib_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "lib.exe")

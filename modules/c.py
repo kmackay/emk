@@ -140,7 +140,7 @@ class _MsvcCompiler(object):
       compile_cxx
     See the documentation for those functions in this class for more details.
     """
-    def __init__(self, path_prefix=None, env_script="vcvarsall.bat"):
+    def __init__(self, path_prefix=None, env_script="vcvarsall.bat", target_arch=None):
         """
         Create a new MsvcCompiler instance.
         
@@ -153,7 +153,7 @@ class _MsvcCompiler(object):
         from link import _MsvcLinker
         
         self.name = "msvc"
-        self._env = _MsvcLinker.vs_env(path_prefix, env_script)
+        self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
         self._dep_re = re.compile(r'Note:\s+including file:\s+([^\s].*)\s*')
 
         self.cl_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "cl.exe")
