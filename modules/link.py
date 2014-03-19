@@ -48,6 +48,7 @@ class _GccLinker(object):
                          to configure the link module to use the cross binutils. The default value is ""
                          (ie, use the system binutils).
         """
+        self.name = "gcc"
         self.path_prefix = path_prefix
         self.c_path = path_prefix + "gcc"
         self.cxx_path = path_prefix + "g++"
@@ -234,6 +235,7 @@ class _OsxLinker(_GccLinker):
     """
     def __init__(self, path_prefix=""):
         super(_OsxLinker, self).__init__(path_prefix)
+        self.name = "clang"
         self.c_path = path_prefix + "clang"
         self.cxx_path = path_prefix + "clang++"
         self.lipo_path = self.path_prefix + "lipo"
@@ -346,6 +348,7 @@ class _MsvcLinker(object):
 
           main_dumpbin_regex -- The compiled regex to use to search for a main() function in the dumpbin output.
         """
+        self.name = "msvc"
         self._env = _MsvcLinker.vs_env(path_prefix, env_script)
 
         self.dumpbin_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "dumpbin.exe")

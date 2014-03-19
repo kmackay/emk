@@ -34,6 +34,7 @@ class _GccCompiler(object):
                          installed into /cross/linux, you might use 'c.compiler = c.GccCompiler("/cross/linux/bin/i686-pc-linux-gnu-")'
                          to configure the c module to use the cross compiler. The default value is "" (ie, use the system gcc/g++).
         """
+        self.name = "gcc"
         self.c_path = path_prefix + "gcc"
         self.cxx_path = path_prefix + "g++"
     
@@ -125,6 +126,7 @@ class _ClangCompiler(_GccCompiler):
     """
     def __init__(self, path_prefix=""):
         super(_ClangCompiler, self).__init__(path_prefix)
+        self.name = "clang"
         self.c_path = path_prefix + "clang"
         self.cxx_path = path_prefix + "clang++"
 
@@ -150,6 +152,7 @@ class _MsvcCompiler(object):
         """
         from link import _MsvcLinker
         
+        self.name = "msvc"
         self._env = _MsvcLinker.vs_env(path_prefix, env_script)
         self._dep_re = re.compile(r'Note:\s+including file:\s+([^\s].*)\s*')
 
