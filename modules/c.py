@@ -156,7 +156,7 @@ class _MsvcCompiler(object):
         self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
         self._dep_re = re.compile(r'Note:\s+including file:\s+([^\s].*)\s*')
 
-        self.cl_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "cl.exe")
+        self.cl_exe = "cl.exe"
 
     def load_extra_dependencies(self, path):
         """

@@ -8,6 +8,7 @@ import glob
 import filecmp
 import sys
 import itertools
+import platform
 
 log = logging.getLogger("emk.utils")
 
@@ -194,9 +195,13 @@ class Module(object):
         stderr_tag = emk.style_tag('stdout')
         if error_stream == "stderr" or error_stream == "both":
             stderr_tag = emk.style_tag('stderr')
+        
+        shell = False
+        if platform.system() == "Windows":
+            shell = True
 
         try:
-            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env)
+            proc = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd, env=env, shell=shell)
             proc_stdout, proc_stderr = proc.communicate()
         except OSError as e:
             stack = []

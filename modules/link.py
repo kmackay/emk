@@ -354,9 +354,9 @@ class _MsvcLinker(object):
         self.name = "msvc"
         self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
 
-        self.dumpbin_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "dumpbin.exe")
-        self.lib_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "lib.exe")
-        self.link_exe = os.path.join(self._env["VCINSTALLDIR"], "bin", "link.exe")
+        self.dumpbin_exe = "dumpbin.exe"
+        self.lib_exe = "lib.exe"
+        self.link_exe = "link.exe"
 
         self.main_dumpbin_regex = re.compile(r'External\s*\|\s*_?(w?main|WinMain)\b')
     
