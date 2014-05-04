@@ -599,6 +599,10 @@ class Module(object):
       
       There are also c-specific and c++-specific versions of the above flags, which are accessed through c.flags (, c.local_flags, ...) and
       cxx.flags (, cxx.local_flags, ...) respectively.
+      
+      exe_funcs        -- A list of functions that are run for each generated executable path.
+      static_lib_funcs -- A list of functions that are run for each generated static library path.
+      shared_lib_funcs -- A list of functions that are run for each generated shared library path.
     """
     def __init__(self, scope, parent=None):
         self.GccLinker = _GccLinker
@@ -676,6 +680,10 @@ class Module(object):
             self.cxx.local_libflags = list(parent.cxx.local_libflags)
             self.cxx.exeflags = list(parent.cxx.exeflags)
             self.cxx.local_exeflags = list(parent.cxx.local_exeflags)
+            
+            self.exe_funcs = list(parent.exe_funcs)
+            self.static_lib_funcs = list(parent.static_lib_funcs)
+            self.shared_lib_funcs = list(parent.shared_lib_funcs)
         else:
             self.comments_regex = re.compile(r'(/\*.*?\*/)|(//.*?$)', re.MULTILINE | re.DOTALL)
             self.main_function_regex = re.compile(r'int\s+main\s*\(')
@@ -744,6 +752,10 @@ class Module(object):
             self.cxx.local_libflags = []
             self.cxx.exeflags = []
             self.cxx.local_exeflags = []
+            
+            self.exe_funcs = []
+            self.static_lib_funcs = []
+            self.shared_lib_funcs = []
     
     @property
     def obj_ext(self):
@@ -907,6 +919,8 @@ class Module(object):
                 emk.rule(self._create_static_lib, libpath, lib_objs, False, cwd_safe=self.linker.static_lib_cwd_safe(), ex_safe=True)
                 emk.alias(libpath, "link.__static_lib__")
                 emk.autobuild(libpath)
+                for f in self.static_lib_funcs:
+                    f(libpath)
             if self.make_shared_lib:
                 libname = self.lib_prefix + dirname + self.shared_lib_ext
                 if self.shared_libname:
@@ -915,6 +929,8 @@ class Module(object):
                 emk.rule(self._create_shared_lib, libpath, ["link.__exe_deps__"] + list(lib_objs), cwd_safe=self.linker.link_cwd_safe(), ex_safe=True)
                 emk.autobuild(libpath)
                 emk.alias(libpath, "link.__shared_lib__")
+                for f in self.shared_lib_funcs:
+                    f(libpath)
         if not making_static_lib:
             utils.mark_virtual_rule(["link.__static_lib__"], [])
         
@@ -931,6 +947,8 @@ class Module(object):
                 cwd_safe=self.linker.static_lib_cwd_safe(), ex_safe=True)
             emk.alias(libpath, "link.__lib_in_lib__")
             emk.autobuild(libpath)
+            for f in self.static_lib_funcs:
+                f(libpath)
         
         exe_targets = []
         exe_names = set()
@@ -953,6 +971,8 @@ class Module(object):
             emk.rule(self._create_exe, path, [obj, "link.__exe_deps__"], cwd_safe=self.linker.link_cwd_safe(), ex_safe=True)
             emk.alias(path, name)
             exe_targets.append(path)
+            for f in self.exe_funcs:
+                f(path)
             
         utils.mark_virtual_rule(["link.__exes__"], exe_targets)
         emk.autobuild("link.__exes__")
