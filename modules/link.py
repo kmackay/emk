@@ -318,6 +318,8 @@ class _MsvcLinker(object):
                     path_prefix = os.path.join(os.environ["VS%uCOMNTOOLS" % v], "..", "..", "VC")
                 except KeyError:
                     continue
+                else:
+                    break
         if path_prefix is None:
             raise BuildError("No installed version of Visual Studio could be found")
 
