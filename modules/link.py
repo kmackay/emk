@@ -902,6 +902,7 @@ class Module(object):
         lib_deps = [os.path.join(d, "link.__static_lib__") for d in self._all_depdirs]
         emk.depend("link.__exe_deps__", lib_deps)
         emk.depend("link.__exe_deps__", self._all_static_libs)
+        emk.depend("link.__exe_deps__", self._local_static_libs)
         
         dirname = os.path.basename(emk.scope_dir)
         if self.unique_names:
