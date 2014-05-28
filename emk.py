@@ -2336,7 +2336,7 @@ class EMK(EMK_Base):
         
         If emk.recurse() is called when handling a directory, the specified directories will be handled after
         the current directory has been completely handled. If emk.recurse() is called during the prebuild stage,
-        the directories will be handled after the current prebuild functions have been executed. If emk.recuse()
+        the directories will be handled after the current prebuild functions have been executed. If emk.recurse()
         is called at any other time, the specified directories will be handled at the start of the next build phase
         (after the postbuild functions have been executed).
         
