@@ -786,6 +786,8 @@ class EMK_Base(object):
             mpath = os.path.realpath(pathname)
             d, tail = os.path.split(mpath)
             os.chdir(d)
+            if description[2] == imp.PY_COMPILED and not os.path.isfile(name + ".py"):
+                raise ImportError("No matching .py")
             if set_scope_dir:
                 self.scope.dir = d
             return imp.load_module(name, fp, pathname, description)
