@@ -170,7 +170,7 @@ class _GccLinker(object):
         """
         sg = "-Wl,--start-group"
         eg = "-Wl,--end-group"
-        call = [cmd] + flags + ["-o", dest] + objs + [sg] + abs_libs + [eg] + lib_dirs + [sg] + libs + [eg]
+        call = [cmd] + flags + ["-o", dest] + objs + lib_dirs + [sg] + abs_libs + libs + [eg]
         utils.call(call, print_stderr=False)
 
     def do_link(self, dest, source_objs, abs_libs, lib_dirs, rel_libs, flags, cxx_mode):
