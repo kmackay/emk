@@ -1,4 +1,3 @@
-/config/emk_global.py
 __build__/
 __pycache__
 *.pyc
