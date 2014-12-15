@@ -58,6 +58,7 @@ The build process in a given directory goes as follows:
   1. Load the global emk config from `<emk dir>/config/emk_global.py` (where &lt;emk dir> is the directory containing the emk.py module),
      if it exists and has not already been loaded (creates the global/root scope). Whenever emk loads any config file, it changes its
      working directory to the directory containing the config file. Note that the global config file may be a symlink.
+     The default included `emk_global.py` just imports config from `~/.emk/config.py`.
   2. Find the project directory. The project directory is the closest ancestor to the current directory that
      contains an `emk_project.py` file, or the root directory if no project file is found. The project directory for the current directory
      is available via `emk.proj_dir`.
