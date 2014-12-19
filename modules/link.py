@@ -453,10 +453,10 @@ class _MsvcLinker(object):
             args = list(utils.flatten([source_objs, abs_libs, lib_dir_flags, rel_libs]))
             f.write(" ".join(args))
 
-            utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s.tmp.resp" % dest,
-                env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
+        utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s.tmp.resp" % dest,
+            env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
 
-            utils.rm("%s.tmp.resp" % (dest))
+        utils.rm("%s.tmp.resp" % (dest))
     
     def link_cwd_safe(self):
         """
