@@ -455,8 +455,6 @@ class _MsvcLinker(object):
 
         utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s.tmp.resp" % dest,
             env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
-
-        utils.rm("%s.tmp.resp" % (dest))
     
     def link_cwd_safe(self):
         """
