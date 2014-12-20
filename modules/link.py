@@ -355,6 +355,7 @@ class _MsvcLinker(object):
         """
         self.name = "msvc"
         self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
+        log.info(self._env)
 
         self.dumpbin_exe = "dumpbin.exe"
         self.lib_exe = "lib.exe"
