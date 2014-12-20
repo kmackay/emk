@@ -458,7 +458,10 @@ class _MsvcLinker(object):
         if not os.path.isfile(resp_path):
             raise emk.BuildError("Failed to create response file for link.exe")
         
-        log.info("File exists here...")
+        log.info("Resp. file  %s exists here..." % (resp_path))
+        with open(resp_path, "rb") as f:
+            data = f.read()
+            log.info("%s size = %s" % (resp_path, len(data)))
 
         utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s" % resp_path,
             env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
