@@ -355,7 +355,6 @@ class _MsvcLinker(object):
         """
         self.name = "msvc"
         self._env = _MsvcLinker.vs_env(path_prefix, env_script, target_arch)
-        log.info(self._env)
 
         self.dumpbin_exe = "dumpbin.exe"
         self.lib_exe = "lib.exe"
@@ -450,22 +449,18 @@ class _MsvcLinker(object):
         lib_dir_flags = ['/LIBPATH:%s' % d for d in lib_dirs]
         rel_libs = [lib + ".lib" for lib in rel_libs]
         
-        resp_path = "%s.tmp.resp" % (dest)
-        with open(resp_path, "wb") as f:
-            args = list(utils.flatten([source_objs, abs_libs, lib_dir_flags, rel_libs]))
-            f.write(" ".join(args))
-            f.close();
-        
-        if not os.path.isfile(resp_path):
-            raise emk.BuildError("Failed to create response file for link.exe")
-        
-        log.info("Resp. file  %s exists here..." % (resp_path))
-        with open(resp_path, "rb") as f:
-            data = f.read()
-            log.info("%s size = %s" % (resp_path, len(data)))
+        args = list(utils.flatten([source_objs, abs_libs, lib_dir_flags, rel_libs]))
+        if len(" ".join(args)) > 8000:
+            resp_path = "%s.tmp.resp" % (dest)
+            with open(resp_path, "wb") as f:
+                args = list(utils.flatten([source_objs, abs_libs, lib_dir_flags, rel_libs]))
+                f.write(" ".join(args))
 
-        utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s" % resp_path,
-            env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
+            utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, "@%s" % resp_path,
+                env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
+        else:
+            utils.call(self.link_exe, "/NOLOGO", flat_flags, '/OUT:%s' % dest, source_objs, abs_libs, lib_dir_flags, rel_libs,
+                env=self._env, print_stdout=False, print_stderr=False, error_stream="both")
     
     def link_cwd_safe(self):
         """
